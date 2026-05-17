@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(taiwan-legal:statute-lookup)",
+      "mcp__plugin_taiwan-legal_taiwan-legal-db__query_regulation",
+      "Bash(./node_modules/.bin/vite build *)",
+      "Bash(git add *)"
+    ]
+  }
+}

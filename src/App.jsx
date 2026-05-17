@@ -411,6 +411,58 @@ const T={
   accent:"#f59e0b",
 };
 
+const LAW_CONFIG={
+  "民法":      {pcode:"B0000001",name:"民法"},
+  "民事訴訟法":{pcode:"B0010001",name:"民事訴訟法"},
+  "刑法":      {pcode:"C0000001",name:"刑法"},
+  "刑事訴訟法":{pcode:"C0010001",name:"刑事訴訟法"},
+  "法律倫理":  {pcode:"D0120014",name:"律師倫理規範"},
+  "憲法":      {pcode:"A0000001",name:"中華民國憲法"},
+  "行政法":    {pcode:"A0150001",name:"行政程序法"},
+};
+const QUICK_LAWS=[
+  {pcode:"C0000001",name:"刑法"},
+  {pcode:"B0000001",name:"民法"},
+  {pcode:"C0010001",name:"刑事訴訟法"},
+  {pcode:"B0010001",name:"民事訴訟法"},
+  {pcode:"A0000001",name:"中華民國憲法"},
+  {pcode:"A0030002",name:"憲法增修條文"},
+  {pcode:"A0030086",name:"憲法訴訟法"},
+  {pcode:"D0120014",name:"律師倫理規範"},
+  {pcode:"A0150001",name:"行政程序法"},
+  {pcode:"C0060001",name:"毒品危害防制條例"},
+  {pcode:"D0050001",name:"公司法"},
+  {pcode:"G0380037",name:"證券交易法"},
+  {pcode:"H0020023",name:"保險法"},
+  {pcode:"G0380108",name:"票據法"},
+  {pcode:"A0060067",name:"地方制度法"},
+  {pcode:"A0150052",name:"行政罰法"},
+  {pcode:"A0030054",name:"行政訴訟法"},
+  {pcode:"A0030055",name:"訴願法"},
+  {pcode:"B0010058",name:"家事事件法"},
+  {pcode:"B0010059",name:"強制執行法"},
+];
+function getLawUrl(pcode,articleNo){
+  if(articleNo)return`https://law.moj.gov.tw/LawClass/LawSingle.aspx?pcode=${pcode}&flno=${articleNo}`;
+  return`https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode=${pcode}`;
+}
+async function fetchArticle(pcode,articleNo){
+  const url=`/.netlify/functions/law-article?pcode=${encodeURIComponent(pcode)}&flno=${encodeURIComponent(articleNo)}`;
+  const res=await fetch(url,{signal:AbortSignal.timeout(10000)});
+  if(!res.ok)throw new Error("HTTP "+res.status);
+  const data=await res.json();
+  if(data.Code!=="00"||!data.ArticleData?.length)throw new Error("no_data");
+  return data.ArticleData[0].ArticleContent;
+}
+async function resolvePcode(lawName){
+  const res=await fetch(
+    `/.netlify/functions/law-article?kw=${encodeURIComponent(lawName)}`,
+    {signal:AbortSignal.timeout(10000)}
+  );
+  const data=await res.json();
+  return data.Code==="00"&&data.QueryData?.[0]?.PCode?data.QueryData[0].PCode:null;
+}
+
 export default function App(){
   const [cat,setCat]=useState("全部");
   const [yr,setYr]=useState("全部");
@@ -441,6 +493,12 @@ export default function App(){
   const [qTimer,setQTimer]=useState(0);
   // 本輪總計時（秒）
   const [totalElapsed,setTotalElapsed]=useState(0);
+  const [drawerOpen,setDrawerOpen]=useState(false);
+  const [drawerLaw,setDrawerLaw]=useState(null);
+  const [drawerLawInput,setDrawerLawInput]=useState("");
+  const [drawerNo,setDrawerNo]=useState("");
+  const [drawerResult,setDrawerResult]=useState(null);
+  const [drawerLoading,setDrawerLoading]=useState(false);
   const timerRef=useRef(null);
   const totalElapsedRef=useRef(0); // 用 ref 在 interval 內讀取最新值
 
@@ -655,8 +713,12 @@ export default function App(){
     else{if(stars.some(s=>s==="g")){stars=["e","e","e","e","e"];}else{const idx=stars.findIndex(s=>s!=="r");if(idx!==-1)stars[idx]="r";}}
     const np={...prog,[id]:{...prev,stars,attempts:prev.attempts+1}};
     setProg(np);save(np);
+    const cfg=LAW_CONFIG[cq.subject];
+    if(cfg&&!drawerLaw)setDrawerLaw(cfg);
+    setDrawerOpen(true);
   }
   function next(){
+    setDrawerOpen(false);setDrawerResult(null);setDrawerNo("");
     if(qi+1>=queue.length){
       clearSession();setSessionExists(false);
       setMode("done");
@@ -685,6 +747,7 @@ export default function App(){
   }
   function examNext(){
     clearInterval(timerRef.current);
+    setDrawerOpen(false);setDrawerResult(null);setDrawerNo("");
     if(qi+1>=queue.length){
       // 全部作答完畢 → 進入結算
       setMode("examDone");
@@ -703,6 +766,26 @@ export default function App(){
     setQi(prevQi);
     if(prevAns!==undefined){setSel(prevAns);setAnswered(true);}
     else{setSel(null);setAnswered(false);}
+  }
+  function openDrawer(){
+    const cfg=LAW_CONFIG[cq?.subject];
+    if(cfg&&!drawerLaw)setDrawerLaw(cfg);
+    setDrawerOpen(true);
+  }
+  async function handleDrawerSearch(){
+    const law=drawerLaw||(drawerLawInput.trim()?{pcode:null,name:drawerLawInput.trim()}:null);
+    if(!law||!drawerNo.trim())return;
+    setDrawerLoading(true);setDrawerResult(null);
+    try{
+      let pcode=law.pcode;
+      if(!pcode){pcode=await resolvePcode(law.name);if(!pcode){setDrawerResult({error:true});return;}}
+      const text=await fetchArticle(pcode,drawerNo.trim());
+      setDrawerResult({text});
+    }catch{
+      setDrawerResult({error:true});
+    }finally{
+      setDrawerLoading(false);
+    }
   }
   const practiced=Object.keys(prog).length;
   const mastered=Object.values(prog).filter(p=>p.stars?.every(v=>v==="g")).length;
@@ -754,6 +837,7 @@ export default function App(){
     </button>
   );
 
+  const isMobile=typeof window!=="undefined"&&window.innerWidth<640;
   const card={background:T.white,borderRadius:16,padding:"1.25rem",boxShadow:"0 2px 18px rgba(22,33,62,0.06)",border:`1px solid ${T.bdr}`,marginTop:"0.75rem"};
 
   return(
@@ -765,7 +849,7 @@ export default function App(){
             <div style={{fontSize:"0.58rem",letterSpacing:"0.14em",color:T.accent,textTransform:"uppercase",fontFamily:"Arial,sans-serif",marginBottom:2}}>
               {[cat,yr].filter(v=>v!=="全部").join("・") || "國家考試題庫練習"}
             </div>
-            <h1 style={{margin:0,fontSize:"1.15rem",fontWeight:700,color:"#fff",letterSpacing:"0.02em"}}>法律練功房</h1>
+            <h1 style={{margin:0,fontSize:"1.15rem",fontWeight:700,color:"#fff",letterSpacing:"0.02em"}}>法律練功房 <span style={{fontSize:"0.65rem",fontWeight:400,opacity:0.6,fontFamily:"Arial,sans-serif"}}>v13.2</span></h1>
           </div>
           <div style={{display:"flex",gap:"0.4rem"}}>
             {[{n:mastered,l:"精熟"},{n:practiced,l:"練習"},{n:totalQ,l:"題數"}].map(({n,l})=>(
@@ -995,6 +1079,7 @@ export default function App(){
                   {getStars(prog,cq.id).map((t,i)=><Star key={i} t={t}/>)}
                 </div>
                 <div style={{display:"flex",gap:"0.3rem",alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end"}}>
+                  <button onClick={openDrawer} style={{padding:"0.22rem 0.6rem",fontSize:"0.65rem",background:"#1a56db",color:"#fff",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"Arial,sans-serif",fontWeight:700,letterSpacing:"0.04em"}}>條文</button>
                   <button onClick={()=>toggleBookmark(cq.id)} title={bookmarks.has(cq.id)?"取消書籤":"加入書籤"} style={{background:"none",border:"none",cursor:"pointer",fontSize:"1.1rem",padding:"0 0.1rem",lineHeight:1,opacity:bookmarks.has(cq.id)?1:0.35,transition:"opacity 0.15s"}}>◈</button>
                   <span style={{fontSize:"0.58rem",background:"#f3e8ff",color:"#7e22ce",borderRadius:4,padding:"0.08rem 0.35rem",fontFamily:"Arial,sans-serif",border:"1px solid #d8b4fe"}}>{cq.examCategory}</span>
                   <span style={{fontSize:"0.6rem",background:T.goldBg,color:T.gold,borderRadius:4,padding:"0.08rem 0.35rem",fontFamily:"Arial,sans-serif",border:`1px solid #f0d080`}}>{cq.year}</span>
@@ -1107,6 +1192,7 @@ export default function App(){
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.75rem"}}>
                 <div style={{fontSize:"0.72rem",color:T.muted,fontFamily:"Arial,sans-serif"}}>{cq.subject}</div>
                 <div style={{display:"flex",gap:"0.3rem",alignItems:"center"}}>
+                  <button onClick={openDrawer} style={{padding:"0.22rem 0.6rem",fontSize:"0.65rem",background:"#1a56db",color:"#fff",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"Arial,sans-serif",fontWeight:700,letterSpacing:"0.04em"}}>條文</button>
                   <span style={{fontSize:"0.58rem",background:T.goldBg,color:T.gold,borderRadius:4,padding:"0.06rem 0.28rem",fontFamily:"Arial,sans-serif",border:`1px solid #f0d080`}}>{cq.year}</span>
                   <span style={{fontSize:"0.58rem",background:"#f3e8ff",color:"#7e22ce",borderRadius:4,padding:"0.06rem 0.28rem",fontFamily:"Arial,sans-serif",border:"1px solid #d8b4fe"}}>{cq.examCategory}</span>
                 </div>
@@ -1219,6 +1305,107 @@ export default function App(){
         })()}
 
       </main>
+
+      {/* ── 法規查詢抽屜 ── */}
+      {(mode==="quiz"||mode==="exam")&&cq&&(()=>{
+        const drawerStyle=isMobile?{
+          position:"fixed",bottom:0,left:0,right:0,
+          height:"60vh",background:T.white,zIndex:200,
+          display:"flex",flexDirection:"column",
+          boxShadow:"0 -4px 24px rgba(0,0,0,0.14)",
+          borderRadius:"16px 16px 0 0",
+          transform:drawerOpen?"translateY(0)":"translateY(100%)",
+          transition:"transform 0.3s ease",
+        }:{
+          position:"fixed",top:0,right:0,
+          width:360,height:"100vh",background:T.white,zIndex:200,
+          display:"flex",flexDirection:"column",
+          boxShadow:"-4px 0 24px rgba(0,0,0,0.12)",
+          transform:drawerOpen?"translateX(0)":"translateX(100%)",
+          transition:"transform 0.3s ease",
+        };
+        const canSearch=(drawerLaw||drawerLawInput.trim())&&drawerNo.trim()&&!drawerLoading;
+        return(
+          <div style={drawerStyle}>
+            {/* 標題列 */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0.875rem 1rem",borderBottom:`1px solid ${T.bdr}`,flexShrink:0}}>
+              <span style={{fontWeight:700,fontSize:"0.92rem",color:T.navy}}>法條查詢</span>
+              <button onClick={()=>setDrawerOpen(false)} style={{background:"none",border:"none",fontSize:"1.2rem",cursor:"pointer",color:T.muted,padding:"0.1rem 0.25rem",lineHeight:1}}>✕</button>
+            </div>
+            {/* 主體 */}
+            <div style={{flex:1,overflowY:"auto",padding:"0.875rem 1rem",display:"flex",flexDirection:"column",gap:"0.875rem"}}>
+              {/* 快速選擇法規 */}
+              <div>
+                <div style={{fontSize:"0.62rem",fontWeight:600,color:T.muted,fontFamily:"Arial,sans-serif",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:"0.4rem"}}>快速選擇法規</div>
+                <div style={{display:"flex",gap:"0.4rem",overflowX:"auto",paddingBottom:"0.3rem",WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>
+                  {QUICK_LAWS.map(law=>{
+                    const active=drawerLaw?.pcode===law.pcode;
+                    return(
+                      <button key={law.pcode} onClick={()=>{setDrawerLaw(law);setDrawerLawInput("");setDrawerResult(null);}}
+                        style={{padding:"0.28rem 0.65rem",borderRadius:100,border:`1.5px solid ${active?"#1a56db":T.bdr}`,background:active?"#1a56db":"transparent",color:active?"#fff":T.ink,fontSize:"0.74rem",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",fontWeight:active?700:400,flexShrink:0,transition:"all 0.12s"}}>
+                        {law.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {/* 自訂法規輸入 */}
+              <div>
+                <div style={{fontSize:"0.62rem",fontWeight:600,color:T.muted,fontFamily:"Arial,sans-serif",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:"0.4rem"}}>其他法規</div>
+                <input type="text" placeholder="輸入法規名稱，如：土地法" value={drawerLawInput}
+                  onChange={e=>{setDrawerLawInput(e.target.value);if(e.target.value)setDrawerLaw(null);setDrawerResult(null);}}
+                  style={{width:"100%",padding:"0.48rem 0.7rem",borderRadius:8,border:`1.5px solid ${drawerLawInput?T.blue:T.bdr}`,fontSize:"0.83rem",fontFamily:"inherit",color:T.ink,outline:"none",boxSizing:"border-box"}}/>
+                {drawerLawInput&&<div style={{fontSize:"0.67rem",color:T.muted,marginTop:"0.22rem",fontFamily:"Arial,sans-serif"}}>將透過全文搜尋比對法規名稱</div>}
+              </div>
+              {/* 目前選取 */}
+              {(drawerLaw||drawerLawInput)&&(
+                <div style={{display:"flex",alignItems:"center",gap:"0.4rem",padding:"0.38rem 0.65rem",background:T.blueBg,borderRadius:8,border:`1px solid #bfdbfe`}}>
+                  <span style={{fontSize:"0.78rem",color:T.blue,fontWeight:600,flex:1}}>{drawerLaw?drawerLaw.name:drawerLawInput}</span>
+                  <button onClick={()=>{setDrawerLaw(null);setDrawerLawInput("");setDrawerResult(null);}} style={{background:"none",border:"none",color:T.muted,cursor:"pointer",fontSize:"1rem",padding:0,lineHeight:1}}>×</button>
+                </div>
+              )}
+              {/* 條號輸入 */}
+              <div>
+                <div style={{fontSize:"0.62rem",fontWeight:600,color:T.muted,fontFamily:"Arial,sans-serif",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:"0.4rem"}}>條號</div>
+                <div style={{display:"flex",gap:"0.5rem"}}>
+                  <input type="number" placeholder="例：184" value={drawerNo}
+                    onChange={e=>{setDrawerNo(e.target.value);setDrawerResult(null);}}
+                    onKeyDown={e=>{if(e.key==="Enter"&&canSearch)handleDrawerSearch();}}
+                    style={{flex:1,padding:"0.48rem 0.7rem",borderRadius:8,border:`1.5px solid ${T.bdr}`,fontSize:"0.95rem",fontFamily:"inherit",color:T.ink,outline:"none",boxSizing:"border-box"}}/>
+                  <button onClick={handleDrawerSearch} disabled={!canSearch}
+                    style={{padding:"0.48rem 1rem",background:canSearch?"#1a56db":"#ccc",color:"#fff",border:"none",borderRadius:8,fontSize:"0.87rem",cursor:canSearch?"pointer":"not-allowed",fontFamily:"inherit",fontWeight:700,whiteSpace:"nowrap",transition:"background 0.15s"}}>查詢</button>
+                </div>
+              </div>
+              {/* 查詢結果 */}
+              {drawerLoading&&(
+                <div style={{textAlign:"center",padding:"1.5rem 0",color:T.muted,fontSize:"0.85rem",fontFamily:"Arial,sans-serif"}}>查詢中…</div>
+              )}
+              {drawerResult&&!drawerLoading&&(
+                drawerResult.error?(
+                  <div style={{padding:"0.875rem",background:T.redBg,border:`1px solid #fca5a5`,borderRadius:10}}>
+                    <div style={{fontSize:"0.82rem",color:T.red,fontWeight:600,marginBottom:"0.35rem"}}>無法載入條文全文</div>
+                    <div style={{fontSize:"0.74rem",color:T.muted,fontFamily:"Arial,sans-serif",marginBottom:"0.65rem",lineHeight:1.6}}>可能原因：CORS 限制、條號不存在或法規名稱有誤</div>
+                    {drawerLaw&&<button onClick={()=>window.open(getLawUrl(drawerLaw.pcode,drawerNo),"_blank")} style={{padding:"0.42rem 0.875rem",background:T.navy,color:"#fff",border:"none",borderRadius:8,fontSize:"0.8rem",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>前往官網查看 →</button>}
+                  </div>
+                ):(
+                  <div style={{background:"#f0f7ff",border:`1px solid #bfdbfe`,borderRadius:10,padding:"0.875rem"}}>
+                    <div style={{fontSize:"0.68rem",color:T.blue,fontFamily:"Arial,sans-serif",marginBottom:"0.45rem",fontWeight:600}}>
+                      {drawerLaw?drawerLaw.name:drawerLawInput} 第 {drawerNo} 條
+                    </div>
+                    <div style={{fontSize:"0.88rem",lineHeight:1.88,color:T.ink,fontFamily:"'Noto Serif TC','Georgia',serif",whiteSpace:"pre-wrap"}}>{drawerResult.text}</div>
+                    {drawerLaw&&<button onClick={()=>window.open(getLawUrl(drawerLaw.pcode,drawerNo),"_blank")} style={{marginTop:"0.75rem",background:"none",border:"none",color:T.blue,fontSize:"0.74rem",cursor:"pointer",fontFamily:"Arial,sans-serif",padding:0,textDecoration:"underline",display:"block"}}>在官網查看完整條文 →</button>}
+                  </div>
+                )
+              )}
+            </div>
+            {/* 底部 */}
+            <div style={{padding:"0.55rem 1rem",borderTop:`1px solid ${T.bdr}`,flexShrink:0,textAlign:"center"}}>
+              <span style={{fontSize:"0.66rem",color:T.muted,fontFamily:"Arial,sans-serif"}}>資料來源：</span>
+              <button onClick={()=>window.open("https://law.moj.gov.tw","_blank")} style={{background:"none",border:"none",color:T.blue,fontSize:"0.66rem",cursor:"pointer",fontFamily:"Arial,sans-serif",padding:0,textDecoration:"underline"}}>law.moj.gov.tw</button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── 匯入 Modal ── */}
       {showImport&&(
