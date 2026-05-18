@@ -761,7 +761,7 @@ export default function App(){
       window.open(getLawUrl(drawerLaw.pcode,no),"_blank","noopener");
     }else if(drawerLawInput.trim()){
       const kw=drawerLawInput.trim();
-      window.open(`https://law.moj.gov.tw/LawClass/LawSearchContent.aspx?pc=&tf=${encodeURIComponent(kw)}&ta=${encodeURIComponent(no)}&TY=04`,"_blank","noopener");
+      window.open(`https://law.moj.gov.tw/LawClass/LawSearchResult.aspx?p=D&q=${encodeURIComponent(kw)}&TY=04`,"_blank","noopener");
     }
   }
   const practiced=Object.keys(prog).length;
@@ -828,7 +828,10 @@ export default function App(){
             </div>
             <h1 style={{margin:0,fontSize:"1.15rem",fontWeight:700,color:"#fff",letterSpacing:"0.02em"}}>法律練功房 <span style={{fontSize:"0.65rem",fontWeight:400,opacity:0.6,fontFamily:"Arial,sans-serif"}}>v14</span></h1>
           </div>
-          <div style={{display:"flex",gap:"0.4rem"}}>
+          <div style={{display:"flex",gap:"0.4rem",alignItems:"center"}}>
+            {(mode==="quiz"||mode==="exam")&&cq&&(
+              <button onClick={openDrawer} style={{padding:"0.25rem 0.6rem",background:"#1a56db",color:"#fff",border:"none",borderRadius:100,fontSize:"0.75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>⚖ 法條</button>
+            )}
             {[{n:mastered,l:"精熟"},{n:practiced,l:"練習"},{n:totalQ,l:"題數"}].map(({n,l})=>(
               <div key={l} style={{background:"rgba(255,255,255,0.1)",borderRadius:8,padding:"0.22rem 0.55rem",textAlign:"center",minWidth:40}}>
                 <span style={{display:"block",fontSize:"0.9rem",fontWeight:700,color:T.accent,lineHeight:1.1}}>{n}</span>
@@ -1314,7 +1317,8 @@ export default function App(){
               {/* 快速選擇法規 */}
               <div>
                 <div style={{fontSize:"0.62rem",fontWeight:600,color:T.muted,fontFamily:"Arial,sans-serif",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:"0.4rem"}}>快速選擇法規</div>
-                <div style={{display:"flex",gap:"0.4rem",flexWrap:"nowrap",overflowX:"auto",paddingBottom:"0.3rem",WebkitOverflowScrolling:"touch",scrollbarWidth:"none"}}>
+                <div style={{overflowX:"auto",overflowY:"hidden",WebkitOverflowScrolling:"touch",paddingBottom:"0.3rem",scrollbarWidth:"none"}}>
+                  <div style={{display:"flex",flexWrap:"nowrap",gap:"0.4rem"}}>
                   {QUICK_LAWS.map(law=>{
                     const active=drawerLaw?.pcode===law.pcode;
                     return(
@@ -1324,6 +1328,7 @@ export default function App(){
                       </button>
                     );
                   })}
+                  </div>
                 </div>
               </div>
               {/* 自訂法規輸入 */}
