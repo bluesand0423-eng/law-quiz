@@ -1317,7 +1317,7 @@ export default function App(){
               {/* 快速選擇法規 */}
               <div>
                 <div style={{fontSize:"0.62rem",fontWeight:600,color:T.muted,fontFamily:"Arial,sans-serif",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:"0.4rem"}}>快速選擇法規</div>
-                <div style={{overflowX:"auto",overflowY:"hidden",WebkitOverflowScrolling:"touch",paddingBottom:"0.3rem",scrollbarWidth:"none"}}>
+                <div style={{overflowX:"auto",overflowY:"hidden",WebkitOverflowScrolling:"touch",paddingBottom:"0.3rem",scrollbarWidth:"none"}} onTouchStart={e=>e.stopPropagation()} onTouchMove={e=>e.stopPropagation()}>
                   <div style={{display:"flex",flexWrap:"nowrap",gap:"0.4rem"}}>
                   {QUICK_LAWS.map(law=>{
                     const active=drawerLaw?.pcode===law.pcode;
