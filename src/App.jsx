@@ -381,7 +381,6 @@ const QB = [
 // ──────────────────────────────
 const ALL_CATEGORIES = ["全部",...new Set(QB.map(q=>q.examCategory))];
 const LS="lawquiz_prog_v1";
-const CUSTOM_LS="lawquiz_custom_v1";
 function load(){
   try{
     // 自動搬移舊版 key (lq114v1) 的進度
@@ -395,8 +394,6 @@ function load(){
   }catch{return{}}
 }
 function save(d){try{localStorage.setItem(LS,JSON.stringify(d))}catch{}}
-function loadCustom(){try{const r=localStorage.getItem(CUSTOM_LS);return r?JSON.parse(r):[]}catch{return[]}}
-function saveCustom(d){try{localStorage.setItem(CUSTOM_LS,JSON.stringify(d))}catch{}}
 
 const BOOKMARK_LS="lawquiz_bookmarks_v1";
 function loadBookmarks(){try{const r=localStorage.getItem(BOOKMARK_LS);return r?new Set(JSON.parse(r)):new Set()}catch{return new Set()}}
@@ -407,16 +404,6 @@ function saveSession(d){try{localStorage.setItem(SESSION_LS,JSON.stringify(d))}c
 function clearSession(){try{localStorage.removeItem(SESSION_LS)}catch{}}
 function fmtTime(s){const m=Math.floor(s/60),sec=s%60;return m>0?`${m}分${sec.toString().padStart(2,"0")}秒`:`${sec} 秒`}
 
-// 驗證匯入題目格式
-const REQUIRED=["id","year","examCategory","examGroup","subject","text","options","answer"];
-function validateQ(q,idx){
-  for(const k of REQUIRED){
-    if(q[k]===undefined||q[k]===null)return`第 ${idx+1} 題缺少欄位「${k}」`;
-  }
-  if(!Array.isArray(q.options)||q.options.length!==4)return`第 ${idx+1} 題 options 須為 4 個選項的陣列`;
-  if(typeof q.answer!=="number"||q.answer<0||q.answer>3)return`第 ${idx+1} 題 answer 須為 0–3 的整數`;
-  return null;
-}
 function shuffle(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];}return b;}
 function getStars(p,id){return p[id]?.stars??["e","e","e","e","e"]}
 function Star({t}){
@@ -490,12 +477,6 @@ export default function App(){
   const [answered,setAnswered]=useState(false);
   const [prog,setProg]=useState(load);
   const [mode,setMode]=useState("filter");
-  // 自訂題目
-  const [customQ,setCustomQ]=useState(loadCustom);
-  const [showImport,setShowImport]=useState(false);
-  const [importText,setImportText]=useState("");
-  const [importErr,setImportErr]=useState("");
-  const [importOk,setImportOk]=useState("");
   // 書籤
   const [bookmarks,setBookmarks]=useState(()=>loadBookmarks());
   // 每個 queue 位置的已選答案：{ [queueIndex]: selectedOptionIndex }
@@ -513,8 +494,7 @@ export default function App(){
   const timerRef=useRef(null);
   const totalElapsedRef=useRef(0); // 用 ref 在 interval 內讀取最新值
 
-  // 合併題庫
-  const ALL_Q=useMemo(()=>[...QB,...customQ],[customQ]);
+  const ALL_Q=QB;
 
   // 動態選項（每層依上層篩選）
   const years  =useMemo(()=>{
@@ -797,39 +777,6 @@ export default function App(){
   const practiced=Object.keys(prog).length;
   const mastered=Object.values(prog).filter(p=>p.stars?.every(v=>v==="g")).length;
   const totalQ=ALL_Q.length;
-  const customCount=customQ.length;
-
-  // 匯入處理
-  function handleImport(){
-    setImportErr("");setImportOk("");
-    let parsed;
-    try{ parsed=JSON.parse(importText.trim()); }
-    catch{ setImportErr("JSON 格式錯誤，請檢查括號與引號是否正確。");return; }
-    if(!Array.isArray(parsed)){setImportErr("頂層必須是陣列 [ ... ]");return;}
-    if(parsed.length===0){setImportErr("陣列為空，請至少包含一題。");return;}
-    // 驗證每題
-    for(let i=0;i<parsed.length;i++){
-      const err=validateQ(parsed[i],i);
-      if(err){setImportErr(err);return;}
-    }
-    // 去重：過濾掉已存在於 QB 的 id
-    const builtinIds=new Set(QB.map(q=>q.id));
-    const newQ=parsed.filter(q=>!builtinIds.has(q.id));
-    // 合併：覆蓋已有自訂題（同 id）
-    const existingIds=new Set(customQ.map(q=>q.id));
-    const merged=[...customQ.filter(q=>!parsed.some(p=>p.id===q.id)),...newQ];
-    setCustomQ(merged);
-    saveCustom(merged);
-    const added=newQ.filter(q=>!existingIds.has(q.id)).length;
-    const updated=newQ.filter(q=>existingIds.has(q.id)).length;
-    setImportOk(`匯入成功！新增 ${added} 題${updated?`、更新 ${updated} 題`:""}。`);
-    setImportText("");
-  }
-
-  function handleDeleteCustom(){
-    if(!confirm(`確定刪除全部 ${customQ.length} 道自訂題目？`))return;
-    setCustomQ([]);saveCustom([]);
-  }
 
   // pill button
   const Pill=({label,active,onClick})=>(
@@ -914,7 +861,7 @@ export default function App(){
               </div>
             </div>
 
-            <div style={{fontSize:"0.78rem",color:T.muted,marginBottom:"0.875rem",fontFamily:"Arial,sans-serif"}}>符合條件：<strong style={{color:T.ink}}>{filtered.length}</strong> 題{customCount>0&&<span style={{marginLeft:"0.4rem",color:T.gold}}>（含自訂 {customCount} 題）</span>}</div>
+            <div style={{fontSize:"0.78rem",color:T.muted,marginBottom:"0.875rem",fontFamily:"Arial,sans-serif"}}>符合條件：<strong style={{color:T.ink}}>{filtered.length}</strong> 題</div>
 
             {/* 科目進度統計 */}
             {Object.keys(subjectStats).length>0&&(
@@ -967,10 +914,6 @@ export default function App(){
               ✦ 考試模式（設定範圍）
             </button>
 
-            {/* 匯入按鈕 */}
-            <button onClick={()=>{setShowImport(true);setImportErr("");setImportOk("");}} style={{width:"100%",marginTop:"0.5rem",padding:"0.62rem",background:"transparent",color:T.blue,border:`1.5px solid ${T.blue}`,borderRadius:12,fontSize:"0.85rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-              ＋ 匯入自訂題目
-            </button>
 
             {/* 題庫總覽 */}
             <div style={{marginTop:"1.25rem",borderTop:`1px solid ${T.bdr}`,paddingTop:"0.875rem"}}>
@@ -979,11 +922,9 @@ export default function App(){
               </div>
               {filtered.map(q=>{
                 const stars=getStars(prog,q.id);
-                const isCustom=!QB.find(b=>b.id===q.id);
                 return(
                   <div key={q.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0.4rem 0",borderBottom:`1px solid ${T.bdr}`,gap:"0.4rem"}}>
                     <div style={{display:"flex",alignItems:"center",gap:"0.3rem",flex:1,overflow:"hidden"}}>
-                      {isCustom&&<span style={{fontSize:"0.56rem",background:"#e0f2fe",color:"#0369a1",borderRadius:4,padding:"0.06rem 0.28rem",fontFamily:"Arial,sans-serif",whiteSpace:"nowrap",flexShrink:0,border:"1px solid #7dd3fc",fontWeight:700}}>自訂</span>}
                       <span style={{fontSize:"0.56rem",background:"#f3e8ff",color:"#7e22ce",borderRadius:4,padding:"0.06rem 0.28rem",fontFamily:"Arial,sans-serif",whiteSpace:"nowrap",flexShrink:0,border:"1px solid #d8b4fe"}}>{q.examCategory}</span>
                       <span style={{fontSize:"0.58rem",background:T.goldBg,color:T.gold,borderRadius:4,padding:"0.06rem 0.28rem",fontFamily:"Arial,sans-serif",whiteSpace:"nowrap",flexShrink:0,border:`1px solid #f0d080`}}>{q.year}</span>
                       <span style={{fontSize:"0.6rem",background:T.blueBg,color:T.blue,borderRadius:4,padding:"0.06rem 0.28rem",fontFamily:"Arial,sans-serif",whiteSpace:"nowrap",flexShrink:0}}>{q.subject}</span>
@@ -994,9 +935,6 @@ export default function App(){
                 );
               })}
               <div style={{display:"flex",gap:"0.5rem",marginTop:"0.75rem"}}>
-                {customCount>0&&(
-                  <button onClick={handleDeleteCustom} style={{flex:1,padding:"0.5rem",background:"transparent",color:"#0369a1",border:`1.5px solid #7dd3fc`,borderRadius:10,fontSize:"0.76rem",cursor:"pointer",fontFamily:"inherit"}}>— 刪除自訂題（{customCount}）</button>
-                )}
                 <button onClick={()=>{if(confirm("確定清除所有作答進度？")){localStorage.removeItem(LS);setProg({});}}} style={{flex:1,padding:"0.5rem",background:"transparent",color:T.red,border:`1.5px solid #fca5a5`,borderRadius:10,fontSize:"0.76rem",cursor:"pointer",fontFamily:"inherit"}}>— 清除作答進度</button>
               </div>
             </div>
@@ -1425,77 +1363,6 @@ export default function App(){
         );
       })()}
 
-      {/* ── 匯入 Modal ── */}
-      {showImport&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.55)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={e=>{if(e.target===e.currentTarget)setShowImport(false);}}>
-          <div style={{background:T.white,borderRadius:"18px 18px 0 0",padding:"1.25rem 1.125rem 2rem",width:"100%",maxWidth:660,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 -8px 32px rgba(0,0,0,0.18)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.875rem"}}>
-              <h2 style={{margin:0,fontSize:"1rem",fontWeight:700,color:T.navy}}>匯入自訂題目</h2>
-              <button onClick={()=>setShowImport(false)} style={{background:"none",border:"none",fontSize:"1.3rem",cursor:"pointer",color:T.muted,padding:"0 0.25rem"}}>✕</button>
-            </div>
-
-            {/* 格式說明 */}
-            <div style={{background:"#f0f9ff",border:"1px solid #7dd3fc",borderRadius:10,padding:"0.75rem 0.9rem",marginBottom:"0.875rem",fontSize:"0.76rem",lineHeight:1.7,color:"#0c4a6e"}}>
-              <div style={{fontWeight:700,marginBottom:"0.35rem",fontSize:"0.8rem"}}>✦ 格式說明</div>
-              <div>頂層為陣列 <code style={{background:"#e0f2fe",padding:"0 3px",borderRadius:3}}>[ … ]</code>，每題包含以下欄位：</div>
-              <table style={{width:"100%",marginTop:"0.5rem",borderCollapse:"collapse",fontSize:"0.72rem"}}>
-                <thead><tr style={{background:"#bae6fd"}}>
-                  <td style={{padding:"3px 6px",fontWeight:700,borderRadius:"4px 0 0 0"}}>欄位</td>
-                  <td style={{padding:"3px 6px",fontWeight:700}}>型別</td>
-                  <td style={{padding:"3px 6px",fontWeight:700,borderRadius:"0 4px 0 0"}}>說明</td>
-                </tr></thead>
-                <tbody>{[
-                  ["id","string","唯一識別碼（不可與內建題重複）"],
-                  ["year","string","年度，如 \"113年\""],
-                  ["examCategory","string","考試類組，如 \"司律一試\""],
-                  ["examGroup","string","考試別，如 \"綜合法學(二)\""],
-                  ["subject","string","科目，如 \"民法\""],
-                  ["text","string","題目內容"],
-                  ["options","string[]","4個選項的陣列"],
-                  ["answer","number","正確答案索引 0–3"],
-                  ["explanation","string","解析（可選）"],
-                ].map(([f,t,d])=>(
-                  <tr key={f} style={{borderBottom:"1px solid #e0f2fe"}}>
-                    <td style={{padding:"3px 6px",fontFamily:"monospace",color:"#0369a1",fontWeight:600}}>{f}</td>
-                    <td style={{padding:"3px 6px",color:"#64748b"}}>{t}</td>
-                    <td style={{padding:"3px 6px"}}>{d}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-              <div style={{marginTop:"0.6rem",fontWeight:600}}>範例：</div>
-              <pre style={{margin:"0.35rem 0 0",background:"#e0f2fe",borderRadius:6,padding:"0.55rem 0.75rem",fontSize:"0.7rem",overflowX:"auto",lineHeight:1.6,color:"#0c4a6e"}}>{`[
-  {
-    "id": "custom-001",
-    "year": "113年",
-    "examCategory": "司律一試",
-    "examGroup": "綜合法學(二)",
-    "subject": "民法",
-    "text": "下列何者正確？",
-    "options": ["A選項","B選項","C選項","D選項"],
-    "answer": 1,
-    "explanation": "因為…（可省略）"
-  }
-]`}</pre>
-            </div>
-
-            {/* 輸入區 */}
-            <textarea
-              value={importText}
-              onChange={e=>{setImportText(e.target.value);setImportErr("");setImportOk("");}}
-              placeholder="在此貼上 JSON 題目陣列…"
-              style={{width:"100%",height:160,padding:"0.7rem",borderRadius:10,border:`1.5px solid ${importErr?T.red:importOk?T.green:T.bdr}`,fontFamily:"monospace",fontSize:"0.77rem",resize:"vertical",boxSizing:"border-box",background:"#fafaf9",color:T.ink,outline:"none"}}
-            />
-
-            {importErr&&<div style={{fontSize:"0.8rem",color:T.red,margin:"0.35rem 0 0",display:"flex",gap:"0.3rem",alignItems:"flex-start"}}>！ {importErr}</div>}
-            {importOk&&<div style={{fontSize:"0.8rem",color:T.green,margin:"0.35rem 0 0",display:"flex",gap:"0.3rem",alignItems:"flex-start"}}>{importOk}</div>}
-
-            <div style={{display:"flex",gap:"0.5rem",marginTop:"0.75rem"}}>
-              <button onClick={()=>setShowImport(false)} style={{flex:1,padding:"0.72rem",background:"transparent",color:T.ink,border:`1.5px solid ${T.bdr}`,borderRadius:12,fontSize:"0.87rem",cursor:"pointer",fontFamily:"inherit"}}>取消</button>
-              <button onClick={handleImport} disabled={!importText.trim()} style={{flex:2,padding:"0.72rem",background:importText.trim()?T.blue:"#ccc",color:"#fff",border:"none",borderRadius:12,fontSize:"0.87rem",fontWeight:700,cursor:importText.trim()?"pointer":"not-allowed",fontFamily:"inherit"}}>確認匯入</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
