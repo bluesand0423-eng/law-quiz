@@ -1,5 +1,32 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 
+const LAW_PCODE_MAP = {
+  "民法": "B0000001",
+  "刑法": "C0000001",
+  "民事訴訟法": "B0010001",
+  "刑事訴訟法": "C0010001",
+  "強制執行法": "B0010003",
+  "公司法": "D0050001",
+  "票據法": "G0380028",
+  "保險法": "G0390002",
+  "土地法": "D0060001",
+  "家事事件法": "B0010071",
+  "行政訴訟法": "A0030154",
+  "行政程序法": "A0150001",
+  "國家賠償法": "A0000020",
+  "中華民國憲法": "A0000001",
+  "憲法訴訟法": "A0030159",
+  "法院組織法": "A0010053",
+  "涉外民事法律適用法": "B0010006",
+  "非訟事件法": "B0010049",
+  "破產法": "B0010004",
+  "地政士法": "D0060042",
+  "消費者保護法": "J0170001",
+  "勞動基準法": "N0030001",
+  "著作權法": "J0070017",
+  "商標法": "J0070031",
+};
+
 const QB = [
   // ══════════════════════════════════════════════
   // 綜合法學(二) — 民法 1-50
@@ -481,6 +508,8 @@ export default function App(){
   const [drawerLaw,setDrawerLaw]=useState(null);
   const [drawerLawInput,setDrawerLawInput]=useState("");
   const [drawerNo,setDrawerNo]=useState("");
+  const [lawSuggestions,setLawSuggestions]=useState([]);
+  const [resolvedPcode,setResolvedPcode]=useState("");
   const timerRef=useRef(null);
   const totalElapsedRef=useRef(0); // 用 ref 在 interval 內讀取最新值
 
@@ -760,7 +789,7 @@ export default function App(){
     if(drawerLaw&&drawerLaw.pcode){
       window.open(getLawUrl(drawerLaw.pcode,no),"_blank","noopener");
     }else if(drawerLawInput.trim()){
-      const pcode=drawerLawInput.trim();
+      const pcode=resolvedPcode||drawerLawInput.trim();
       if(!pcode)return;
       window.open(`https://law.moj.gov.tw/LawClass/LawSingle.aspx?pcode=${pcode}&flno=${no}`,"_blank","noopener");
     }
@@ -1335,9 +1364,35 @@ export default function App(){
               {/* 自訂法規輸入 */}
               <div>
                 <div style={{fontSize:"0.62rem",fontWeight:600,color:T.muted,fontFamily:"Arial,sans-serif",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:"0.4rem"}}>其他法規（需輸入 pcode）</div>
-                <input type="text" placeholder="輸入法規代號，如：J0150001" value={drawerLawInput}
-                  onChange={e=>{setDrawerLawInput(e.target.value);if(e.target.value)setDrawerLaw(null);}}
-                  style={{width:"100%",padding:"0.48rem 0.7rem",borderRadius:8,border:`1.5px solid ${drawerLawInput?T.blue:T.bdr}`,fontSize:"0.83rem",fontFamily:"inherit",color:T.ink,outline:"none",boxSizing:"border-box"}}/>
+                <div style={{position:"relative"}}>
+                  <input type="text" placeholder="輸入法規名稱或 pcode，如：民法、B0000001" value={drawerLawInput}
+                    onChange={e=>{
+                      const v=e.target.value;
+                      setDrawerLawInput(v);
+                      setResolvedPcode("");
+                      if(e.target.value)setDrawerLaw(null);
+                      if(v.trim()){
+                        const matches=Object.entries(LAW_PCODE_MAP).filter(([k])=>k.includes(v.trim())).slice(0,5);
+                        setLawSuggestions(matches);
+                      }else{
+                        setLawSuggestions([]);
+                      }
+                    }}
+                    onBlur={()=>setTimeout(()=>setLawSuggestions([]),150)}
+                    style={{width:"100%",padding:"0.48rem 0.7rem",borderRadius:8,border:`1.5px solid ${drawerLawInput?T.blue:T.bdr}`,fontSize:"0.83rem",fontFamily:"inherit",color:T.ink,outline:"none",boxSizing:"border-box"}}/>
+                  {lawSuggestions.length>0&&(
+                    <div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:`1px solid ${T.bdr}`,borderRadius:8,boxShadow:"0 4px 12px rgba(0,0,0,0.1)",zIndex:100,overflow:"hidden"}}>
+                      {lawSuggestions.map(([name,pcode])=>(
+                        <div key={pcode} onMouseDown={()=>{setDrawerLawInput(name);setResolvedPcode(pcode);setLawSuggestions([]);}}
+                          style={{padding:"0.42rem 0.7rem",fontSize:"0.82rem",cursor:"pointer",color:T.ink,borderBottom:`1px solid ${T.bdr}`}}
+                          onMouseEnter={e=>e.currentTarget.style.background=T.blueBg}
+                          onMouseLeave={e=>e.currentTarget.style.background=""}>
+                          {name}<span style={{color:T.muted,marginLeft:"0.5rem",fontSize:"0.72rem"}}>({pcode})</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div style={{fontSize:"0.7rem",color:"#888",marginTop:"0.22rem",fontFamily:"Arial,sans-serif"}}>查詢 pcode 方式：至 law.moj.gov.tw 搜尋該法規名稱，進入後複製網址列中 pcode= 後面的英數代碼（例：土地法的 pcode 為 D0060001）</div>
                 <button onClick={()=>window.open("https://law.moj.gov.tw","_blank","noopener")} style={{fontSize:"0.7rem",color:"#1a56db",background:"transparent",border:"none",cursor:"pointer",padding:0,textDecoration:"underline",marginTop:"0.18rem"}}>前往官網查詢 pcode →</button>
               </div>
