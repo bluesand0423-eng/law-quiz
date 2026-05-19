@@ -760,8 +760,9 @@ export default function App(){
     if(drawerLaw&&drawerLaw.pcode){
       window.open(getLawUrl(drawerLaw.pcode,no),"_blank","noopener");
     }else if(drawerLawInput.trim()){
-      const kw=drawerLawInput.trim();
-      window.open(`https://law.moj.gov.tw/LawClass/LawSearchResult.aspx?p=D&q=${encodeURIComponent(kw)}&TY=04`,"_blank","noopener");
+      const pcode=drawerLawInput.trim();
+      if(!pcode)return;
+      window.open(`https://law.moj.gov.tw/LawClass/LawSingle.aspx?pcode=${pcode}&flno=${no}`,"_blank","noopener");
     }
   }
   const practiced=Object.keys(prog).length;
@@ -1333,11 +1334,12 @@ export default function App(){
               </div>
               {/* 自訂法規輸入 */}
               <div>
-                <div style={{fontSize:"0.62rem",fontWeight:600,color:T.muted,fontFamily:"Arial,sans-serif",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:"0.4rem"}}>其他法規</div>
-                <input type="text" placeholder="輸入法規名稱，如：土地法" value={drawerLawInput}
+                <div style={{fontSize:"0.62rem",fontWeight:600,color:T.muted,fontFamily:"Arial,sans-serif",letterSpacing:"0.07em",textTransform:"uppercase",marginBottom:"0.4rem"}}>其他法規（需輸入 pcode）</div>
+                <input type="text" placeholder="輸入法規代號，如：J0150001" value={drawerLawInput}
                   onChange={e=>{setDrawerLawInput(e.target.value);if(e.target.value)setDrawerLaw(null);}}
                   style={{width:"100%",padding:"0.48rem 0.7rem",borderRadius:8,border:`1.5px solid ${drawerLawInput?T.blue:T.bdr}`,fontSize:"0.83rem",fontFamily:"inherit",color:T.ink,outline:"none",boxSizing:"border-box"}}/>
-                {drawerLawInput&&<div style={{fontSize:"0.67rem",color:T.muted,marginTop:"0.22rem",fontFamily:"Arial,sans-serif"}}>將透過全文搜尋比對法規名稱</div>}
+                <div style={{fontSize:"0.7rem",color:"#888",marginTop:"0.22rem",fontFamily:"Arial,sans-serif"}}>查詢 pcode 方式：至 law.moj.gov.tw 搜尋該法規名稱，進入後複製網址列中 pcode= 後面的英數代碼（例：土地法的 pcode 為 D0060001）</div>
+                <button onClick={()=>window.open("https://law.moj.gov.tw","_blank","noopener")} style={{fontSize:"0.7rem",color:"#1a56db",background:"transparent",border:"none",cursor:"pointer",padding:0,textDecoration:"underline",marginTop:"0.18rem"}}>前往官網查詢 pcode →</button>
               </div>
               {/* 目前選取 */}
               {(drawerLaw||drawerLawInput)&&(
