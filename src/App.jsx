@@ -491,10 +491,48 @@ export default function App(){
   const [drawerNo,setDrawerNo]=useState("");
   const [lawSuggestions,setLawSuggestions]=useState([]);
   const [resolvedPcode,setResolvedPcode]=useState("");
+  const [importMsg,setImportMsg]=useState("");
   const timerRef=useRef(null);
+  const fileInputRef=useRef(null);
   const totalElapsedRef=useRef(0); // 用 ref 在 interval 內讀取最新值
 
   const ALL_Q=QB;
+
+  function exportProgress(){
+    const progData=JSON.parse(localStorage.getItem(LS)||"{}");
+    const bmData=JSON.parse(localStorage.getItem(BOOKMARK_LS)||"[]");
+    const payload={version:"1.0",prog:progData,bookmarks:bmData,exportedAt:new Date().toISOString()};
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    const d=new Date();
+    const ymd=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}`;
+    a.href=url; a.download=`lawquiz_backup_${ymd}.json`; a.click();
+    URL.revokeObjectURL(url);
+  }
+  function importProgress(){fileInputRef.current.click();}
+  function handleFileImport(e){
+    const file=e.target.files[0]; if(!file)return;
+    e.target.value="";
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{
+        const d=JSON.parse(ev.target.result);
+        if(!d.version||typeof d.prog!=="object"||d.prog===null||Array.isArray(d.prog)||!Array.isArray(d.bookmarks)){
+          setImportMsg("error");setTimeout(()=>setImportMsg(""),3000);return;
+        }
+        localStorage.setItem(LS,JSON.stringify(d.prog));
+        localStorage.setItem(BOOKMARK_LS,JSON.stringify(d.bookmarks));
+        setProg(load());
+        setBookmarks(loadBookmarks());
+        const n=Object.keys(d.prog).length;
+        setImportMsg(`ok:${n}`);setTimeout(()=>setImportMsg(""),2000);
+      }catch{
+        setImportMsg("error");setTimeout(()=>setImportMsg(""),3000);
+      }
+    };
+    reader.readAsText(file);
+  }
 
   // 動態選項（每層依上層篩選）
   const years  =useMemo(()=>{
@@ -914,6 +952,16 @@ export default function App(){
               ✦ 考試模式（設定範圍）
             </button>
 
+
+            {/* 匯出／匯入進度 */}
+            <div style={{marginTop:"0.75rem"}}>
+              <div style={{display:"flex",gap:"0.5rem"}}>
+                <button onClick={exportProgress} style={{flex:1,padding:"0.5rem",background:"transparent",color:"#3b82f6",border:"1.5px solid #93c5fd",borderRadius:10,fontSize:"0.76rem",cursor:"pointer",fontFamily:"inherit"}}>↓ 匯出進度</button>
+                <button onClick={importProgress} style={{flex:1,padding:"0.5rem",background:"transparent",color:"#3b82f6",border:"1.5px solid #93c5fd",borderRadius:10,fontSize:"0.76rem",cursor:"pointer",fontFamily:"inherit"}}>↑ 匯入進度</button>
+              </div>
+              {importMsg&&<div style={{fontSize:"0.72rem",textAlign:"center",marginTop:"0.3rem",color:importMsg.startsWith("ok")?"#16a34a":"#dc2626"}}>{importMsg.startsWith("ok")?`匯入成功，已還原 ${importMsg.slice(3)} 題進度`:"檔案格式不符"}</div>}
+              <input ref={fileInputRef} type="file" accept=".json" style={{display:"none"}} onChange={handleFileImport}/>
+            </div>
 
             {/* 題庫總覽 */}
             <div style={{marginTop:"1.25rem",borderTop:`1px solid ${T.bdr}`,paddingTop:"0.875rem"}}>
