@@ -841,7 +841,7 @@ export default function App(){
             <div style={{fontSize:"0.58rem",letterSpacing:"0.14em",color:T.accent,textTransform:"uppercase",fontFamily:"Arial,sans-serif",marginBottom:2}}>
               {[cat,yr].filter(v=>v!=="全部").join("・") || "國家考試題庫練習"}
             </div>
-            <h1 style={{margin:0,fontSize:"1.15rem",fontWeight:700,color:"#fff",letterSpacing:"0.02em"}}>法律練功房 <span style={{fontSize:"0.65rem",fontWeight:400,opacity:0.6,fontFamily:"Arial,sans-serif"}}>v14</span></h1>
+            <h1 style={{margin:0,fontSize:"1.15rem",fontWeight:700,color:"#fff",letterSpacing:"0.02em"}}>法律練功房 <span style={{fontSize:"0.65rem",fontWeight:400,opacity:0.6,fontFamily:"Arial,sans-serif"}}>v14.5</span></h1>
           </div>
           <div style={{display:"flex",gap:"0.4rem",alignItems:"center"}}>
             {(mode==="quiz"||mode==="exam")&&cq&&(
