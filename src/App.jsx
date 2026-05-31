@@ -1,4 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { supabase } from "./supabaseClient";
+import { fetchProgress, upsertProgress, batchUpsertProgress, clearProgress, migrateFromLocalStorage } from "./db";
 
 const LAW_PCODE_MAP = {
   "民法": "B0000001",
@@ -699,14 +701,22 @@ function Star({t}){
 // design tokens
 // ──────────────────────────────
 const T={
-  bg:"#f5f1ea",white:"#fffefb",
-  navy:"#16213e",ink:"#2c2c44",muted:"#7a7a8c",
-  bdr:"#e2ddd5",
-  gold:"#c07c0a",goldBg:"#fef8e8",
-  blue:"#2563eb",blueBg:"#eff6ff",
-  green:"#166534",greenBg:"#f0fdf4",
-  red:"#991b1b",redBg:"#fef2f2",
-  accent:"#f59e0b",
+  bg:"#EDF4F8",
+  surface:"#F5F9FC",
+  surfaceDeep:"#E8F0F6",
+  bdr:"#D0E4EF",
+  ink:"#3A4A5C",
+  muted:"#7A90A4",
+  faint:"#A8BCC8",
+  accent:"#7BB8D4",
+  accentHover:"#5FA3C4",
+  green:"#7EC8A4",greenBg:"#EAF7F0",
+  red:"#E8998D",redBg:"#FDF0EE",
+  gold:"#D4A84B",goldBg:"#FDF6E3",
+  // backward-compat aliases
+  white:"#F5F9FC",
+  navy:"#3A4A5C",
+  blue:"#5FA3C4",blueBg:"#EDF4F8",
 };
 
 const LAW_CONFIG={
@@ -779,6 +789,20 @@ export default function App(){
   const timerRef=useRef(null);
   const fileInputRef=useRef(null);
   const totalElapsedRef=useRef(0); // 用 ref 在 interval 內讀取最新值
+  // ── Supabase Auth ──
+  const userRef=useRef(null);
+  const [user,setUser]=useState(null);
+  const [showAuth,setShowAuth]=useState(false);
+  const [authMode,setAuthMode]=useState("login");
+  const [authEmail,setAuthEmail]=useState("");
+  const [authPw,setAuthPw]=useState("");
+  const [authError,setAuthError]=useState("");
+  const [authLoading,setAuthLoading]=useState(false);
+  // ── 企鵝日誌 ──
+  const [penguinData,setPenguinData]=useState(null);
+  const [journalInput,setJournalInput]=useState("");
+  const [journalSaving,setJournalSaving]=useState(false);
+  const [cardVisible,setCardVisible]=useState(false);
 
   const ALL_Q=QB;
 
@@ -809,6 +833,7 @@ export default function App(){
         localStorage.setItem(BOOKMARK_LS,JSON.stringify(d.bookmarks));
         setProg(load());
         setBookmarks(loadBookmarks());
+        if(userRef.current)batchUpsertProgress(userRef.current.id,d.prog);
         const n=Object.keys(d.prog).length;
         setImportMsg(`ok:${n}`);setTimeout(()=>setImportMsg(""),2000);
       }catch{
@@ -906,6 +931,67 @@ export default function App(){
   },[qi,mode]);
   // 作答後停止每題計時（考試模式：選完即停，不顯示解析但計時停）
   useEffect(()=>{if(answered)clearInterval(timerRef.current);},[answered]);
+
+  // ── Supabase Auth 初始化 ──
+  useEffect(()=>{
+    supabase.auth.getSession().then(({data:{session}})=>{
+      const u=session?.user??null;
+      setUser(u);userRef.current=u;
+      if(u){fetchProgress(u.id).then(remote=>setProg(prev=>({...prev,...remote})));loadPenguinData(u.id);}
+    });
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_evt,session)=>{
+      const u=session?.user??null;
+      setUser(u);userRef.current=u;
+      if(u){
+        migrateFromLocalStorage(u.id).then(()=>
+          fetchProgress(u.id).then(remote=>setProg(remote))
+        );
+        loadPenguinData(u.id);
+      }
+    });
+    return()=>subscription.unsubscribe();
+  },[]);
+
+  async function loadPenguinData(userId){
+    const today=new Date().toISOString().slice(0,10);
+    const[{data:journal},{data:stats}]=await Promise.all([
+      supabase.from("penguin_journal").select("penguin_note,user_note").eq("user_id",userId).eq("date",today).maybeSingle(),
+      supabase.from("user_stats").select("total_study_days,total_questions").eq("user_id",userId).maybeSingle(),
+    ]);
+    setPenguinData({
+      penguinNote:journal?.penguin_note??"今天也一起努力了。",
+      userNote:journal?.user_note??null,
+      totalStudyDays:stats?.total_study_days??0,
+      totalQuestions:stats?.total_questions??0,
+    });
+    setTimeout(()=>setCardVisible(true),50);
+  }
+  async function saveUserNote(){
+    if(!userRef.current||!journalInput.trim())return;
+    setJournalSaving(true);
+    const today=new Date().toISOString().slice(0,10);
+    await supabase.from("penguin_journal").upsert(
+      {user_id:userRef.current.id,date:today,user_note:journalInput.trim()},
+      {onConflict:"user_id,date"}
+    );
+    setPenguinData(prev=>({...prev,userNote:journalInput.trim()}));
+    setJournalInput("");setJournalSaving(false);
+  }
+
+  async function handleAuth(){
+    setAuthError("");setAuthLoading(true);
+    const fn=authMode==="signup"
+      ?supabase.auth.signUp
+      :supabase.auth.signInWithPassword;
+    const {error}=await fn.call(supabase.auth,{email:authEmail,password:authPw});
+    setAuthLoading(false);
+    if(error){setAuthError(error.message);return;}
+    setShowAuth(false);setAuthEmail("");setAuthPw("");
+  }
+  async function handleSignOut(){
+    await supabase.auth.signOut();
+    setProg(load()); // 退回 localStorage 快取
+  }
 
   // sessionExists：用 state 明確追蹤，避免 stale closure 問題
   const [sessionExists,setSessionExists]=useState(()=>{
@@ -1026,6 +1112,7 @@ export default function App(){
     else{if(stars.some(s=>s==="g")){stars=["e","e","e","e","e"];}else{const idx=stars.findIndex(s=>s!=="r");if(idx!==-1)stars[idx]="r";}}
     const np={...prog,[id]:{...prev,stars,attempts:prev.attempts+1}};
     setProg(np);save(np);
+    if(userRef.current)upsertProgress(userRef.current.id,id,stars,np[id].attempts);
     const cfg=LAW_CONFIG[cq.subject];
     if(cfg&&!drawerLaw)setDrawerLaw(cfg);
     setDrawerOpen(true);
@@ -1102,39 +1189,40 @@ export default function App(){
 
   // pill button
   const Pill=({label,active,onClick})=>(
-    <button onClick={onClick} style={{padding:"0.3rem 0.75rem",borderRadius:100,border:`1.5px solid ${active?T.navy:T.bdr}`,background:active?T.navy:"transparent",color:active?"#fff":T.ink,fontSize:"0.78rem",cursor:"pointer",fontFamily:"inherit",transition:"all 0.12s",whiteSpace:"nowrap"}}>
+    <button onClick={onClick} style={{padding:"0.3rem 0.75rem",borderRadius:100,border:`1.5px solid ${active?"transparent":T.bdr}`,background:active?T.accent:T.bg,color:active?"#fff":T.muted,fontSize:"0.78rem",cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s ease",whiteSpace:"nowrap",fontWeight:active?500:400}}>
       {label}
     </button>
   );
   // 考試篩選用多選 Pill（金色調）
   const ExamPill=({label,active,onClick})=>(
-    <button onClick={onClick} style={{padding:"0.3rem 0.75rem",borderRadius:100,border:`1.5px solid ${active?T.gold:"#e2ddd5"}`,background:active?T.goldBg:"transparent",color:active?T.gold:T.muted,fontSize:"0.78rem",cursor:"pointer",fontFamily:"inherit",transition:"all 0.12s",whiteSpace:"nowrap",fontWeight:active?700:400}}>
+    <button onClick={onClick} style={{padding:"0.3rem 0.75rem",borderRadius:100,border:`1.5px solid ${active?T.gold:T.bdr}`,background:active?T.goldBg:T.bg,color:active?T.gold:T.muted,fontSize:"0.78rem",cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s ease",whiteSpace:"nowrap",fontWeight:active?500:400}}>
       {label}
     </button>
   );
 
   const isMobile=typeof window!=="undefined"&&window.innerWidth<640;
-  const card={background:T.white,borderRadius:16,padding:"1.25rem",boxShadow:"0 2px 18px rgba(22,33,62,0.06)",border:`1px solid ${T.bdr}`,marginTop:"0.75rem"};
+  const card={background:T.surface,borderRadius:16,padding:"1.25rem",boxShadow:"0 2px 16px rgba(160,200,220,0.25)",border:`1px solid ${T.bdr}`,marginTop:"0.75rem"};
 
   return(
-    <div style={{fontFamily:"'Noto Serif TC','Georgia',serif",background:T.bg,minHeight:"100vh",color:T.ink}}>
+    <div style={{fontFamily:"'Noto Sans TC','Arial',sans-serif",background:T.bg,minHeight:"100vh",color:T.ink}}>
+      <style>{`.lq-btn:hover{transform:translateY(-1px);} .lq-btn{transition:all 0.2s ease;}`}</style>
       {/* header */}
-      <header style={{background:T.navy,padding:"0.875rem 1.125rem",position:"sticky",top:0,zIndex:20,boxShadow:"0 3px 18px rgba(0,0,0,0.28)"}}>
+      <header style={{background:"rgba(219,236,245,0.88)",backdropFilter:"blur(12px)",padding:"0.875rem 1.125rem",position:"sticky",top:0,zIndex:20,boxShadow:"0 2px 16px rgba(160,200,220,0.3)",borderBottom:`1px solid ${T.bdr}`}}>
         <div style={{maxWidth:660,margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
-            <div style={{fontSize:"0.58rem",letterSpacing:"0.14em",color:T.accent,textTransform:"uppercase",fontFamily:"Arial,sans-serif",marginBottom:2}}>
+            <div style={{fontSize:"0.58rem",letterSpacing:"0.14em",color:T.muted,textTransform:"uppercase",fontFamily:"'Noto Sans TC',sans-serif",marginBottom:2}}>
               {[cat,yr].filter(v=>v!=="全部").join("・") || "國家考試題庫練習"}
             </div>
-            <h1 style={{margin:0,fontSize:"1.15rem",fontWeight:700,color:"#fff",letterSpacing:"0.02em"}}>法律練功房 <span style={{fontSize:"0.65rem",fontWeight:400,opacity:0.6,fontFamily:"Arial,sans-serif"}}>v14.5</span></h1>
+            <h1 style={{margin:0,fontSize:"1.15rem",fontWeight:500,color:T.ink,letterSpacing:"0.02em",fontFamily:"'Noto Serif TC',serif"}}>法律練功房 <span style={{fontSize:"0.65rem",fontWeight:300,opacity:0.5,fontFamily:"'Noto Sans TC',sans-serif"}}>v14.5</span></h1>
           </div>
           <div style={{display:"flex",gap:"0.4rem",alignItems:"center"}}>
             {(mode==="quiz"||mode==="exam")&&cq&&(
-              <button onClick={openDrawer} style={{padding:"0.25rem 0.6rem",background:"#1a56db",color:"#fff",border:"none",borderRadius:100,fontSize:"0.75rem",fontWeight:600,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>⚖ 法條</button>
+              <button onClick={openDrawer} style={{padding:"0.25rem 0.6rem",background:T.accent,color:"#fff",border:"none",borderRadius:100,fontSize:"0.75rem",fontWeight:500,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>⚖ 法條</button>
             )}
             {[{n:mastered,l:"精熟"},{n:practiced,l:"練習"},{n:totalQ,l:"題數"}].map(({n,l})=>(
-              <div key={l} style={{background:"rgba(255,255,255,0.1)",borderRadius:8,padding:"0.22rem 0.55rem",textAlign:"center",minWidth:40}}>
-                <span style={{display:"block",fontSize:"0.9rem",fontWeight:700,color:T.accent,lineHeight:1.1}}>{n}</span>
-                <span style={{display:"block",fontSize:"0.56rem",color:"#aaa",fontFamily:"Arial,sans-serif"}}>{l}</span>
+              <div key={l} style={{background:"rgba(123,184,212,0.12)",borderRadius:8,padding:"0.22rem 0.55rem",textAlign:"center",minWidth:40,border:`1px solid ${T.bdr}`}}>
+                <span style={{display:"block",fontSize:"0.9rem",fontWeight:500,color:T.accent,lineHeight:1.1}}>{n}</span>
+                <span style={{display:"block",fontSize:"0.56rem",color:T.faint,fontFamily:"'Noto Sans TC',sans-serif"}}>{l}</span>
               </div>
             ))}
           </div>
@@ -1142,6 +1230,55 @@ export default function App(){
       </header>
 
       <main style={{maxWidth:660,margin:"0 auto",padding:"0.875rem 0.875rem 4rem"}}>
+
+        {/* ── 企鵝日誌卡片 ── */}
+        {mode==="filter"&&(()=>{
+          const today=new Date();
+          const dateStr=`${today.getFullYear()}.${String(today.getMonth()+1).padStart(2,"0")}.${String(today.getDate()).padStart(2,"0")}`;
+          return(
+            <div style={{background:T.surface,borderRadius:16,padding:"1.25rem",boxShadow:"0 2px 16px rgba(160,200,220,0.25)",border:`1px solid ${T.bdr}`,marginTop:"0.75rem",opacity:user?cardVisible?1:0:1,transition:"opacity 0.4s ease"}}>
+              {user&&penguinData?(
+                <>
+                  <div style={{display:"flex",alignItems:"flex-start",gap:"0.75rem",marginBottom:"0.75rem"}}>
+                    <span style={{fontSize:"2.2rem",lineHeight:1,filter:"drop-shadow(0 2px 6px rgba(123,184,212,0.35))",flexShrink:0}}>🐧</span>
+                    <div style={{flex:1}}>
+                      <p style={{margin:0,fontSize:"0.92rem",lineHeight:1.75,color:T.ink,fontFamily:"'Noto Serif TC',serif",fontWeight:400}}>{penguinData.penguinNote}</p>
+                      <p style={{margin:"0.35rem 0 0",fontSize:"0.72rem",color:T.faint,fontFamily:"'Noto Sans TC',sans-serif",fontWeight:300}}>{dateStr}</p>
+                    </div>
+                  </div>
+                  <div style={{fontSize:"0.78rem",color:T.muted,fontFamily:"'Noto Sans TC',sans-serif",marginBottom:"0.875rem",paddingBottom:"0.875rem",borderBottom:`1px solid ${T.bdr}`}}>
+                    累積學習 <strong style={{color:T.ink}}>{penguinData.totalStudyDays}</strong> 天 &ensp;·&ensp; 共 <strong style={{color:T.ink}}>{penguinData.totalQuestions}</strong> 題
+                  </div>
+                  {penguinData.userNote?(
+                    <p style={{margin:0,fontSize:"0.8rem",color:T.muted,fontStyle:"italic",fontFamily:"'Noto Serif TC',serif",fontWeight:300}}>「{penguinData.userNote}」</p>
+                  ):(
+                    <div style={{display:"flex",gap:"0.5rem",alignItems:"center"}}>
+                      <input value={journalInput} onChange={e=>setJournalInput(e.target.value)}
+                        onKeyDown={e=>{if(e.key==="Enter")saveUserNote();}}
+                        placeholder="今天有什麼想記住的？（可以略過）"
+                        style={{flex:1,padding:"0.42rem 0.65rem",borderRadius:8,border:`1.5px solid ${T.bdr}`,fontSize:"0.8rem",fontFamily:"'Noto Sans TC',sans-serif",color:T.ink,outline:"none",background:T.bg,boxSizing:"border-box"}}/>
+                      <button onClick={saveUserNote} disabled={journalSaving||!journalInput.trim()} className="lq-btn"
+                        style={{padding:"0.42rem 0.85rem",background:journalInput.trim()?T.accent:"#ccc",color:"#fff",border:"none",borderRadius:8,fontSize:"0.78rem",cursor:journalInput.trim()?"pointer":"default",fontFamily:"inherit",whiteSpace:"nowrap",fontWeight:500}}>
+                        {journalSaving?"…":"儲存"}
+                      </button>
+                    </div>
+                  )}
+                </>
+              ):(
+                <>
+                  <div style={{display:"flex",alignItems:"flex-start",gap:"0.75rem",marginBottom:"0.875rem"}}>
+                    <span style={{fontSize:"2.2rem",lineHeight:1,filter:"drop-shadow(0 2px 6px rgba(123,184,212,0.35))",flexShrink:0}}>🐧</span>
+                    <p style={{margin:0,fontSize:"0.88rem",lineHeight:1.75,color:T.muted,fontFamily:"'Noto Serif TC',serif",fontWeight:400}}>登入後，<br/>企鵝會記得你每一天的努力。</p>
+                  </div>
+                  <button onClick={()=>setShowAuth(v=>!v)} className="lq-btn"
+                    style={{width:"100%",padding:"0.55rem",background:T.accent,color:"#fff",border:"none",borderRadius:10,fontSize:"0.85rem",fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>
+                    登入 / 註冊
+                  </button>
+                </>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── 篩選 ── */}
         {mode==="filter"&&(
@@ -1187,24 +1324,24 @@ export default function App(){
 
             {/* 科目進度統計 */}
             {Object.keys(subjectStats).length>0&&(
-              <div style={{background:"#f8f7f4",borderRadius:12,padding:"0.75rem 0.9rem",marginBottom:"0.875rem",border:`1px solid ${T.bdr}`}}>
-                <div style={{fontSize:"0.65rem",fontWeight:600,color:T.muted,letterSpacing:"0.07em",textTransform:"uppercase",fontFamily:"Arial,sans-serif",marginBottom:"0.55rem"}}>各科進度</div>
+              <div style={{background:T.surface,borderRadius:12,padding:"0.75rem 0.9rem",marginBottom:"0.875rem",border:`1px solid ${T.bdr}`,boxShadow:"0 1px 8px rgba(160,200,220,0.15)"}}>
+                <div style={{fontSize:"0.65rem",fontWeight:500,color:T.muted,letterSpacing:"0.07em",textTransform:"uppercase",fontFamily:"'Noto Sans TC',sans-serif",marginBottom:"0.55rem"}}>各科進度</div>
                 {Object.entries(subjectStats).map(([s,{total,mastered,practiced}])=>(
-                  <div key={s} style={{marginBottom:"0.45rem"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.18rem"}}>
-                      <span style={{fontSize:"0.76rem",color:T.ink}}>{s}</span>
-                      <span style={{fontSize:"0.7rem",color:T.muted,fontFamily:"Arial,sans-serif"}}>
-                        精熟 <strong style={{color:T.gold}}>{mastered}</strong> / 練習 <strong style={{color:T.blue}}>{practiced}</strong> / 共 {total}
+                  <div key={s} style={{marginBottom:"0.5rem"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.2rem"}}>
+                      <span style={{fontSize:"0.76rem",color:T.ink,fontWeight:400}}>{s}</span>
+                      <span style={{fontSize:"0.7rem",color:T.muted,fontFamily:"'Noto Sans TC',sans-serif"}}>
+                        精熟 <strong style={{color:T.gold}}>{mastered}</strong> / 練習 <strong style={{color:T.accent}}>{practiced}</strong> / 共 {total}
                       </span>
                     </div>
-                    <div style={{height:5,background:T.bdr,borderRadius:4,overflow:"hidden",display:"flex"}}>
-                      <div style={{width:`${mastered/total*100}%`,background:T.accent,transition:"width 0.4s"}}/>
-                      <div style={{width:`${(practiced-mastered)/total*100}%`,background:"#93c5fd",transition:"width 0.4s"}}/>
+                    <div style={{height:6,background:T.bdr,borderRadius:100,overflow:"hidden",display:"flex"}}>
+                      <div style={{width:`${mastered/total*100}%`,background:T.gold,transition:"width 0.4s ease"}}/>
+                      <div style={{width:`${(practiced-mastered)/total*100}%`,background:T.accent,transition:"width 0.4s ease",opacity:0.6}}/>
                     </div>
                   </div>
                 ))}
-                <div style={{display:"flex",gap:"0.75rem",marginTop:"0.5rem",fontSize:"0.66rem",color:T.muted,fontFamily:"Arial,sans-serif"}}>
-                  <span><span style={{color:T.accent}}>■</span> 精熟</span><span><span style={{color:"#93c5fd"}}>■</span> 已練習</span><span><span style={{color:T.bdr}}>■</span> 未練習</span>
+                <div style={{display:"flex",gap:"0.75rem",marginTop:"0.5rem",fontSize:"0.66rem",color:T.faint,fontFamily:"'Noto Sans TC',sans-serif"}}>
+                  <span><span style={{color:T.gold}}>■</span> 精熟</span><span><span style={{color:T.accent}}>■</span> 已練習</span><span><span style={{color:T.bdr}}>■</span> 未練習</span>
                 </div>
               </div>
             )}
@@ -1247,6 +1384,44 @@ export default function App(){
               <input ref={fileInputRef} type="file" accept=".json" style={{display:"none"}} onChange={handleFileImport}/>
             </div>
 
+            {/* 帳號 */}
+            <div style={{marginTop:"0.75rem"}}>
+              {user?(
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0.45rem 0.75rem",background:T.greenBg,borderRadius:10,border:"1px solid #bbf7d0"}}>
+                  <span style={{fontSize:"0.74rem",color:T.green,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>✓ {user.email}</span>
+                  <button onClick={handleSignOut} style={{marginLeft:"0.5rem",fontSize:"0.72rem",color:T.muted,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>登出</button>
+                </div>
+              ):(
+                <>
+                  <button onClick={()=>setShowAuth(v=>!v)} style={{width:"100%",padding:"0.48rem",background:"transparent",color:T.blue,border:"1.5px solid #93c5fd",borderRadius:10,fontSize:"0.76rem",cursor:"pointer",fontFamily:"inherit"}}>
+                    {showAuth?"▲ 收起":"▼ 登入 / 建立帳號（跨裝置同步進度）"}
+                  </button>
+                  {showAuth&&(
+                    <div style={{marginTop:"0.5rem",padding:"0.75rem",background:"#f8f7f4",borderRadius:10,border:`1px solid ${T.bdr}`}}>
+                      <div style={{display:"flex",gap:"0.5rem",marginBottom:"0.5rem"}}>
+                        {[["login","登入"],["signup","註冊"]].map(([m,l])=>(
+                          <button key={m} onClick={()=>{setAuthMode(m);setAuthError("");}}
+                            style={{flex:1,padding:"0.35rem",fontSize:"0.74rem",borderRadius:8,border:`1.5px solid ${authMode===m?T.blue:T.bdr}`,background:authMode===m?T.blueBg:"transparent",color:authMode===m?T.blue:T.muted,cursor:"pointer",fontFamily:"inherit"}}>
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                      <input type="email" placeholder="電子郵件" value={authEmail} onChange={e=>setAuthEmail(e.target.value)}
+                        style={{width:"100%",padding:"0.42rem 0.6rem",borderRadius:8,border:`1.5px solid ${T.bdr}`,fontSize:"0.82rem",fontFamily:"inherit",boxSizing:"border-box",marginBottom:"0.4rem",outline:"none"}}/>
+                      <input type="password" placeholder="密碼（至少 6 字元）" value={authPw} onChange={e=>setAuthPw(e.target.value)}
+                        onKeyDown={e=>{if(e.key==="Enter")handleAuth();}}
+                        style={{width:"100%",padding:"0.42rem 0.6rem",borderRadius:8,border:`1.5px solid ${T.bdr}`,fontSize:"0.82rem",fontFamily:"inherit",boxSizing:"border-box",marginBottom:"0.4rem",outline:"none"}}/>
+                      {authError&&<div style={{fontSize:"0.72rem",color:T.red,marginBottom:"0.35rem"}}>{authError}</div>}
+                      <button onClick={handleAuth} disabled={authLoading||!authEmail||!authPw}
+                        style={{width:"100%",padding:"0.52rem",background:authLoading||!authEmail||!authPw?"#ccc":T.navy,color:"#fff",border:"none",borderRadius:8,fontSize:"0.82rem",fontWeight:700,cursor:authLoading?"wait":"pointer",fontFamily:"inherit"}}>
+                        {authLoading?"處理中…":authMode==="login"?"登入":"建立帳號"}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
             {/* 題庫總覽 */}
             <div style={{marginTop:"1.25rem",borderTop:`1px solid ${T.bdr}`,paddingTop:"0.875rem"}}>
               <div style={{fontSize:"0.68rem",color:T.muted,fontFamily:"Arial,sans-serif",letterSpacing:"0.09em",textTransform:"uppercase",marginBottom:"0.6rem"}}>
@@ -1267,7 +1442,7 @@ export default function App(){
                 );
               })}
               <div style={{display:"flex",gap:"0.5rem",marginTop:"0.75rem"}}>
-                <button onClick={()=>{if(confirm("確定清除所有作答進度？")){localStorage.removeItem(LS);setProg({});}}} style={{flex:1,padding:"0.5rem",background:"transparent",color:T.red,border:`1.5px solid #fca5a5`,borderRadius:10,fontSize:"0.76rem",cursor:"pointer",fontFamily:"inherit"}}>— 清除作答進度</button>
+                <button onClick={()=>{if(confirm("確定清除所有作答進度？")){localStorage.removeItem(LS);setProg({});if(userRef.current)clearProgress(userRef.current.id);}}} style={{flex:1,padding:"0.5rem",background:"transparent",color:T.red,border:`1.5px solid #fca5a5`,borderRadius:10,fontSize:"0.76rem",cursor:"pointer",fontFamily:"inherit"}}>— 清除作答進度</button>
               </div>
             </div>
           </div>
@@ -1342,8 +1517,8 @@ export default function App(){
         {mode==="quiz"&&cq&&(
           <div>
             <div style={{marginTop:"0.75rem"}}>
-              <div style={{height:4,background:T.bdr,borderRadius:4,overflow:"hidden"}}>
-                <div style={{height:"100%",background:T.navy,borderRadius:4,width:`${(qi+1)/queue.length*100}%`,transition:"width 0.3s"}}/>
+              <div style={{height:5,background:T.bdr,borderRadius:100,overflow:"hidden"}}>
+                <div style={{height:"100%",background:T.accent,borderRadius:100,width:`${(qi+1)/queue.length*100}%`,transition:"width 0.4s ease"}}/>
               </div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:"0.2rem"}}>
                 <div style={{fontSize:"0.66rem",color:T.muted,fontFamily:"Arial,sans-serif"}}>第 {qi+1} / {queue.length} 題</div>
@@ -1371,15 +1546,15 @@ export default function App(){
               {/* options */}
               <div style={{display:"flex",flexDirection:"column",gap:"0.44rem"}}>
                 {cq.options.map((opt,i)=>{
-                  let bg="#f9f8f5",bdr=T.bdr,clr=T.ink,fw=400;
+                  let bg=T.surfaceDeep,bdr=T.bdr,clr=T.ink,fw=400,stripe="transparent";
                   if(answered){
-                    if(i===cq.answer){bg=T.greenBg;bdr="#86efac";clr=T.green;fw=600;}
-                    else if(i===sel){bg=T.redBg;bdr="#fca5a5";clr=T.red;fw=600;}
+                    if(i===cq.answer){bg=T.greenBg;bdr=T.green;clr="#2d7a5a";fw=500;stripe=T.green;}
+                    else if(i===sel){bg=T.redBg;bdr=T.red;clr="#a04040";fw=500;stripe=T.red;}
                   }
                   const dimmed=answered&&i!==cq.answer&&i!==sel;
                   return(
-                    <button key={i} onClick={()=>handleAns(i)} disabled={answered} style={{display:"flex",alignItems:"flex-start",gap:"0.62rem",padding:"0.78rem 0.9rem",background:bg,border:`1.5px solid ${bdr}`,borderRadius:12,textAlign:"left",cursor:answered?"default":"pointer",fontFamily:"inherit",fontSize:"0.87rem",color:clr,fontWeight:fw,lineHeight:1.58,width:"100%",boxSizing:"border-box",opacity:dimmed?0.35:1,transition:"all 0.12s"}}>
-                      <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:22,height:22,borderRadius:"50%",background:answered&&i===cq.answer?"#166534":answered&&i===sel?"#991b1b":T.bdr,color:answered&&(i===cq.answer||i===sel)?"#fff":T.navy,fontSize:"0.67rem",fontWeight:700,flexShrink:0,fontFamily:"Arial,sans-serif",marginTop:2}}>{["A","B","C","D"][i]}</span>
+                    <button key={i} onClick={()=>handleAns(i)} disabled={answered} style={{display:"flex",alignItems:"flex-start",gap:"0.62rem",padding:"0.78rem 0.9rem",background:bg,border:`1.5px solid ${bdr}`,borderLeft:`3px solid ${stripe==="transparent"?bdr:stripe}`,borderRadius:10,textAlign:"left",cursor:answered?"default":"pointer",fontFamily:"inherit",fontSize:"0.87rem",color:clr,fontWeight:fw,lineHeight:1.58,width:"100%",boxSizing:"border-box",opacity:dimmed?0.3:1,transition:"all 0.2s ease"}}>
+                      <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:22,height:22,borderRadius:"50%",background:answered&&i===cq.answer?T.green:answered&&i===sel?T.red:T.bdr,color:answered&&(i===cq.answer||i===sel)?"#fff":T.muted,fontSize:"0.67rem",fontWeight:600,flexShrink:0,fontFamily:"'Noto Sans TC',sans-serif",marginTop:2}}>{["A","B","C","D"][i]}</span>
                       <span style={{flex:1}}>{opt}</span>
                     </button>
                   );
