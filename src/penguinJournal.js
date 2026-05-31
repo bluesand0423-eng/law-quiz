@@ -91,7 +91,7 @@ export async function updateUserStats(userId, questionsToday) {
 
   const daysTogether = Math.floor(
     (now.getTime() - new Date(firstLoginAt).getTime()) / (1000 * 60 * 60 * 24)
-  );
+  ) + 1;
 
   const { error } = await supabase.from("user_stats").upsert(
     {

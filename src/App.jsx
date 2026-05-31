@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
-import { fetchProgress, upsertProgress, batchUpsertProgress, clearProgress, migrateFromLocalStorage } from "./db";
+import { fetchProgress, upsertProgress, batchUpsertProgress, clearProgress, migrateFromLocalStorage, getTodayMemory } from "./db";
 
 const LAW_PCODE_MAP = {
   "民法": "B0000001",
@@ -697,6 +697,15 @@ function Star({t}){
   return <span style={{color:c,fontSize:"0.9rem",filter:t!=="e"?`drop-shadow(0 0 3px ${c}99)`:"none"}}>{t==="e"?"☆":"★"}</span>
 }
 
+const MILESTONE_LABELS={
+  FIRST_DAY:"第一天",
+  DAY_100:"第100天",
+  ONE_YEAR:"一週年",
+  TWO_YEAR:"兩週年",
+  QUESTIONS_1000:"累積1000題",
+  QUESTIONS_5000:"累積5000題",
+};
+
 // ──────────────────────────────
 // design tokens
 // ──────────────────────────────
@@ -712,8 +721,8 @@ const T={
   accentHover:"#5F7A8A",
   cta:"#4C3D3E",
   ctaHover:"#3A2D2E",
-  green:"#7EC8A4",greenBg:"#C8DEDA",
-  red:"#C08070",redBg:"#E0D0CA",
+  green:"#6A9E72",greenBg:"#C8DBC8",
+  red:"#B07060",redBg:"#E8CEC8",
   gold:"#D4A84B",goldBg:"#E8DEC8",
   // backward-compat aliases
   white:"#DDD9D2",
@@ -805,6 +814,10 @@ export default function App(){
   const [journalInput,setJournalInput]=useState("");
   const [journalSaving,setJournalSaving]=useState(false);
   const [cardVisible,setCardVisible]=useState(false);
+  const [todayMemory,setTodayMemory]=useState(null);
+  const [journalTab,setJournalTab]=useState("all");
+  const [journalEntries,setJournalEntries]=useState([]);
+  const [journalLoading,setJournalLoading]=useState(false);
 
   const ALL_Q=QB;
 
@@ -966,6 +979,7 @@ export default function App(){
       totalStudyDays:stats?.total_study_days??0,
       totalQuestions:stats?.total_questions??0,
     });
+    getTodayMemory(userId).then(setTodayMemory);
     setTimeout(()=>setCardVisible(true),50);
   }
   async function saveUserNote(){
@@ -978,6 +992,22 @@ export default function App(){
     );
     setPenguinData(prev=>({...prev,userNote:journalInput.trim()}));
     setJournalInput("");setJournalSaving(false);
+  }
+
+  async function loadJournalEntries(userId){
+    setJournalLoading(true);
+    const{data}=await supabase
+      .from("penguin_journal")
+      .select("date,penguin_note,user_note,questions_done,milestone_type")
+      .eq("user_id",userId)
+      .order("date",{ascending:false});
+    setJournalEntries(data??[]);
+    setJournalLoading(false);
+  }
+  function openJournal(){
+    setMode("journal");
+    setJournalTab("all");
+    if(userRef.current) loadJournalEntries(userRef.current.id);
   }
 
   async function handleAuth(){
@@ -1265,6 +1295,9 @@ export default function App(){
                       </button>
                     </div>
                   )}
+                  <div style={{textAlign:"right",marginTop:"0.55rem"}}>
+                    <button onClick={openJournal} style={{background:"none",border:"none",color:T.faint,fontSize:"0.7rem",cursor:"pointer",fontFamily:"'Noto Sans TC',sans-serif",padding:0,letterSpacing:"0.02em"}}>查看全部日誌 →</button>
+                  </div>
                 </>
               ):(
                 <>
@@ -1278,6 +1311,32 @@ export default function App(){
                   </button>
                 </>
               )}
+            </div>
+          );
+        })()}
+
+        {/* ── 今日回憶 ── */}
+        {mode==="filter"&&user&&todayMemory&&(()=>{
+          const d=new Date(todayMemory.date+"T00:00:00");
+          const dateLabel=`${d.getFullYear()} 年 ${d.getMonth()+1} 月 ${d.getDate()} 日`;
+          const title=todayMemory.daysAgo===365?"翻到一年前的今天":`翻到 ${todayMemory.daysAgo} 天前`;
+          return(
+            <div style={{background:T.surface,borderRadius:16,padding:"1.25rem",boxShadow:"0 2px 16px rgba(160,200,220,0.25)",border:`1px solid ${T.bdr}`,marginTop:"0.75rem"}}>
+              <div style={{fontSize:"0.65rem",fontWeight:600,color:T.faint,letterSpacing:"0.07em",textTransform:"uppercase",fontFamily:"Arial,sans-serif",marginBottom:"0.75rem"}}>今日回憶</div>
+              <div style={{display:"flex",alignItems:"flex-start",gap:"0.75rem",marginBottom:"0.6rem"}}>
+                <span style={{fontSize:"1.9rem",lineHeight:1,flexShrink:0,opacity:0.72}}>🐧</span>
+                <div>
+                  <p style={{margin:"0 0 0.18rem",fontSize:"0.8rem",color:T.muted,fontFamily:"'Noto Sans TC',sans-serif",fontWeight:400}}>{title}</p>
+                  <p style={{margin:0,fontSize:"0.72rem",color:T.faint,fontFamily:"'Noto Sans TC',sans-serif",fontWeight:300}}>{dateLabel}</p>
+                </div>
+              </div>
+              <p style={{margin:"0 0 0.5rem",fontSize:"0.9rem",lineHeight:1.75,color:T.ink,fontFamily:"'Noto Serif TC',serif",fontWeight:400}}>{todayMemory.penguin_note}</p>
+              {todayMemory.user_note&&(
+                <p style={{margin:"0 0 0.6rem",fontSize:"0.8rem",color:T.muted,fontStyle:"italic",fontFamily:"'Noto Serif TC',serif",fontWeight:300}}>你說：『{todayMemory.user_note}』</p>
+              )}
+              <div style={{fontSize:"0.75rem",color:T.muted,fontFamily:"'Noto Sans TC',sans-serif",paddingTop:"0.6rem",borderTop:`1px solid ${T.bdr}`}}>
+                那天做了 <strong style={{color:T.ink}}>{todayMemory.questions_done??0}</strong> 題 &ensp;→&ensp; 現在累積 <strong style={{color:T.ink}}>{penguinData?.totalQuestions??0}</strong> 題
+              </div>
             </div>
           );
         })()}
@@ -1550,13 +1609,13 @@ export default function App(){
                 {cq.options.map((opt,i)=>{
                   let bg=T.surfaceDeep,bdr=T.bdr,clr=T.ink,fw=400,stripe="transparent";
                   if(answered){
-                    if(i===cq.answer){bg=T.greenBg;bdr=T.green;clr="#2d7a5a";fw=500;stripe=T.green;}
-                    else if(i===sel){bg=T.redBg;bdr=T.red;clr="#a04040";fw=500;stripe=T.red;}
+                    if(i===cq.answer){bg=T.greenBg;bdr=T.green;clr="#2A5C34";fw=500;stripe=T.green;}
+                    else if(i===sel){bg=T.redBg;bdr=T.red;clr="#7A3E30";fw=500;stripe=T.red;}
                   }
                   const dimmed=answered&&i!==cq.answer&&i!==sel;
                   return(
                     <button key={i} onClick={()=>handleAns(i)} disabled={answered} style={{display:"flex",alignItems:"flex-start",gap:"0.62rem",padding:"0.78rem 0.9rem",background:bg,border:`1.5px solid ${bdr}`,borderLeft:`3px solid ${stripe==="transparent"?bdr:stripe}`,borderRadius:10,textAlign:"left",cursor:answered?"default":"pointer",fontFamily:"inherit",fontSize:"0.87rem",color:clr,fontWeight:fw,lineHeight:1.58,width:"100%",boxSizing:"border-box",opacity:dimmed?0.3:1,transition:"all 0.2s ease"}}>
-                      <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:22,height:22,borderRadius:"50%",background:answered&&i===cq.answer?T.green:answered&&i===sel?T.red:T.bdr,color:answered&&(i===cq.answer||i===sel)?"#fff":T.muted,fontSize:"0.67rem",fontWeight:600,flexShrink:0,fontFamily:"'Noto Sans TC',sans-serif",marginTop:2}}>{["A","B","C","D"][i]}</span>
+                      <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:22,height:22,borderRadius:"50%",background:answered&&i===cq.answer?T.green:answered&&i===sel?T.red:T.bdr,color:answered&&(i===cq.answer||i===sel)?"#ECEAE5":T.muted,fontSize:"0.67rem",fontWeight:600,flexShrink:0,fontFamily:"'Noto Sans TC',sans-serif",marginTop:2}}>{["A","B","C","D"][i]}</span>
                       <span style={{flex:1}}>{opt}</span>
                     </button>
                   );
@@ -1564,7 +1623,7 @@ export default function App(){
               </div>
 
               {answered&&(
-                <div style={{marginTop:"0.85rem",borderRadius:10,padding:"0.7rem 0.875rem",fontSize:"0.82rem",lineHeight:1.72,background:sel===cq.answer?T.greenBg:T.redBg,border:`1px solid ${sel===cq.answer?"#86efac":"#fca5a5"}`}}>
+                <div style={{marginTop:"0.85rem",borderRadius:10,padding:"0.7rem 0.875rem",fontSize:"0.82rem",lineHeight:1.72,background:sel===cq.answer?T.greenBg:T.redBg,border:`1px solid ${sel===cq.answer?T.green:T.red}`}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.2rem"}}>
                     <div style={{display:"flex",alignItems:"center",gap:"0.4rem"}}>
                       <span style={{fontWeight:700,fontSize:"0.86rem",color:sel===cq.answer?T.green:T.red}}>{sel===cq.answer?"✓ 答對了！":"✗ 答錯了"}</span>
@@ -1757,6 +1816,94 @@ export default function App(){
                 <button onClick={()=>setMode("filter")} style={{flex:1,padding:"0.72rem",background:"transparent",color:T.ink,border:`1.5px solid ${T.bdr}`,borderRadius:12,fontSize:"0.87rem",cursor:"pointer",fontFamily:"inherit"}}>← 回首頁</button>
                 <button onClick={()=>{setExamAnswers({});totalElapsedRef.current=0;setTotalElapsed(0);startExam();}} style={{flex:2,padding:"0.72rem",background:T.cta,color:"#ECEAE5",border:"none",borderRadius:12,fontSize:"0.87rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>再考一次 →</button>
               </div>
+            </div>
+          );
+        })()}
+
+        {/* ── 日誌列表頁 /journal ── */}
+        {mode==="journal"&&(()=>{
+          if(!user) return(
+            <div style={{...{background:T.surface,borderRadius:16,padding:"1.25rem",boxShadow:"0 2px 16px rgba(160,200,220,0.25)",border:`1px solid ${T.bdr}`,marginTop:"0.75rem"},textAlign:"center",padding:"2.5rem 1.25rem"}}>
+              <p style={{color:T.muted,fontSize:"0.9rem",fontFamily:"'Noto Serif TC',serif",margin:0}}>登入後才能查看日誌。</p>
+            </div>
+          );
+
+          let filtered=journalEntries;
+          if(journalTab==="capsule") filtered=journalEntries.filter(e=>e.user_note&&e.user_note.trim()!=="");
+          if(journalTab==="milestone") filtered=journalEntries.filter(e=>e.milestone_type);
+
+          const groupMap={};
+          const groupOrder=[];
+          filtered.forEach(e=>{
+            const[y,m]=e.date.split("-");
+            const key=`${y}年${parseInt(m)}月`;
+            if(!groupMap[key]){groupMap[key]=[];groupOrder.push(key);}
+            groupMap[key].push(e);
+          });
+
+          return(
+            <div style={{marginTop:"0.75rem"}}>
+              {/* 頁頭 */}
+              <div style={{display:"flex",alignItems:"center",gap:"0.5rem",marginBottom:"0.875rem"}}>
+                <button onClick={()=>setMode("filter")} style={{background:"none",border:"none",color:T.muted,fontSize:"0.82rem",cursor:"pointer",fontFamily:"inherit",padding:"0.2rem 0.4rem",lineHeight:1}}>← 返回</button>
+                <span style={{fontSize:"1rem",fontWeight:500,color:T.ink,fontFamily:"'Noto Serif TC',serif"}}>全部日誌</span>
+              </div>
+
+              {/* Tab 列 */}
+              <div style={{display:"flex",gap:"0.35rem",marginBottom:"0.875rem"}}>
+                {[["all","全部日誌"],["capsule","時光膠囊"],["milestone","里程碑"]].map(([k,l])=>(
+                  <button key={k} onClick={()=>setJournalTab(k)}
+                    style={{padding:"0.3rem 0.75rem",borderRadius:100,border:`1.5px solid ${journalTab===k?"transparent":T.bdr}`,background:journalTab===k?T.accent:T.bg,color:journalTab===k?"#fff":T.muted,fontSize:"0.78rem",cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s ease",whiteSpace:"nowrap",fontWeight:journalTab===k?500:400}}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+
+              {/* 內容 */}
+              {journalLoading?(
+                <p style={{color:T.faint,fontSize:"0.85rem",textAlign:"center",padding:"2.5rem 0",fontFamily:"'Noto Sans TC',sans-serif"}}>載入中…</p>
+              ):filtered.length===0?(
+                <p style={{color:T.faint,fontSize:"0.85rem",textAlign:"center",padding:"2.5rem 0",fontFamily:"'Noto Sans TC',sans-serif"}}>
+                  {journalTab==="capsule"?"尚無時光膠囊記錄。":journalTab==="milestone"?"尚無里程碑記錄。":"尚無日誌記錄。"}
+                </p>
+              ):journalTab==="milestone"?(
+                filtered.map(e=>{
+                  const d=new Date(e.date+"T00:00:00");
+                  const dateLabel=`${d.getFullYear()} 年 ${d.getMonth()+1} 月 ${d.getDate()} 日`;
+                  return(
+                    <div key={e.date} style={{background:T.goldBg,borderRadius:12,padding:"0.875rem 1rem",marginBottom:"0.6rem",border:`1px solid ${T.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:"0.75rem"}}>
+                      <div>
+                        <div style={{fontSize:"0.85rem",fontWeight:600,color:T.cta,marginBottom:"0.25rem"}}>⭐ {MILESTONE_LABELS[e.milestone_type]??e.milestone_type}</div>
+                        {e.penguin_note&&<p style={{margin:0,fontSize:"0.8rem",color:T.muted,fontFamily:"'Noto Serif TC',serif",lineHeight:1.6}}>{e.penguin_note}</p>}
+                      </div>
+                      <span style={{fontSize:"0.72rem",color:T.faint,fontFamily:"'Noto Sans TC',sans-serif",flexShrink:0,paddingTop:"0.1rem"}}>{dateLabel}</span>
+                    </div>
+                  );
+                })
+              ):(
+                groupOrder.map(month=>(
+                  <div key={month} style={{marginBottom:"1.25rem"}}>
+                    <div style={{fontSize:"0.7rem",fontWeight:600,color:T.faint,letterSpacing:"0.06em",fontFamily:"Arial,sans-serif",marginBottom:"0.5rem",paddingBottom:"0.35rem",borderBottom:`1px solid ${T.bdr}`}}>{month}</div>
+                    {groupMap[month].map(e=>{
+                      const d=new Date(e.date+"T00:00:00");
+                      const dateLabel=`${d.getMonth()+1}月${d.getDate()}日`;
+                      return(
+                        <div key={e.date} style={{background:T.surface,borderRadius:12,padding:"0.875rem",marginBottom:"0.5rem",border:`1px solid ${T.bdr}`}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.4rem"}}>
+                            <span style={{fontSize:"0.75rem",color:T.muted,fontFamily:"'Noto Sans TC',sans-serif"}}>{dateLabel}</span>
+                            {e.milestone_type&&<span style={{fontSize:"0.66rem",color:T.gold,fontWeight:600,background:T.goldBg,borderRadius:100,padding:"0.08rem 0.5rem",border:`1px solid ${T.gold}`}}>⭐ {MILESTONE_LABELS[e.milestone_type]??e.milestone_type}</span>}
+                          </div>
+                          <p style={{margin:"0 0 0.3rem",fontSize:"0.88rem",lineHeight:1.7,color:T.ink,fontFamily:"'Noto Serif TC',serif",fontWeight:400}}>{e.penguin_note}</p>
+                          {e.user_note&&e.user_note.trim()&&(
+                            <p style={{margin:"0 0 0.3rem",fontSize:"0.78rem",color:T.muted,fontStyle:"italic",fontFamily:"'Noto Serif TC',serif"}}>你說：『{e.user_note}』</p>
+                          )}
+                          <div style={{fontSize:"0.7rem",color:T.faint,fontFamily:"'Noto Sans TC',sans-serif",marginTop:"0.2rem"}}>做了 <strong style={{color:T.muted}}>{e.questions_done??0}</strong> 題</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))
+              )}
             </div>
           );
         })()}
