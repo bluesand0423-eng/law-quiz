@@ -712,8 +712,8 @@ const T={
   accentHover:"#5F7A8A",
   cta:"#4C3D3E",
   ctaHover:"#3A2D2E",
-  green:"#7EC8A4",greenBg:"#C8DEDA",
-  red:"#C08070",redBg:"#E0D0CA",
+  green:"#6A9E72",greenBg:"#C8DBC8",
+  red:"#B07060",redBg:"#E8CEC8",
   gold:"#D4A84B",goldBg:"#E8DEC8",
   // backward-compat aliases
   white:"#DDD9D2",
@@ -1550,13 +1550,13 @@ export default function App(){
                 {cq.options.map((opt,i)=>{
                   let bg=T.surfaceDeep,bdr=T.bdr,clr=T.ink,fw=400,stripe="transparent";
                   if(answered){
-                    if(i===cq.answer){bg=T.greenBg;bdr=T.green;clr="#2d7a5a";fw=500;stripe=T.green;}
-                    else if(i===sel){bg=T.redBg;bdr=T.red;clr="#a04040";fw=500;stripe=T.red;}
+                    if(i===cq.answer){bg=T.greenBg;bdr=T.green;clr="#2A5C34";fw=500;stripe=T.green;}
+                    else if(i===sel){bg=T.redBg;bdr=T.red;clr="#7A3E30";fw=500;stripe=T.red;}
                   }
                   const dimmed=answered&&i!==cq.answer&&i!==sel;
                   return(
                     <button key={i} onClick={()=>handleAns(i)} disabled={answered} style={{display:"flex",alignItems:"flex-start",gap:"0.62rem",padding:"0.78rem 0.9rem",background:bg,border:`1.5px solid ${bdr}`,borderLeft:`3px solid ${stripe==="transparent"?bdr:stripe}`,borderRadius:10,textAlign:"left",cursor:answered?"default":"pointer",fontFamily:"inherit",fontSize:"0.87rem",color:clr,fontWeight:fw,lineHeight:1.58,width:"100%",boxSizing:"border-box",opacity:dimmed?0.3:1,transition:"all 0.2s ease"}}>
-                      <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:22,height:22,borderRadius:"50%",background:answered&&i===cq.answer?T.green:answered&&i===sel?T.red:T.bdr,color:answered&&(i===cq.answer||i===sel)?"#fff":T.muted,fontSize:"0.67rem",fontWeight:600,flexShrink:0,fontFamily:"'Noto Sans TC',sans-serif",marginTop:2}}>{["A","B","C","D"][i]}</span>
+                      <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:22,height:22,borderRadius:"50%",background:answered&&i===cq.answer?T.green:answered&&i===sel?T.red:T.bdr,color:answered&&(i===cq.answer||i===sel)?"#ECEAE5":T.muted,fontSize:"0.67rem",fontWeight:600,flexShrink:0,fontFamily:"'Noto Sans TC',sans-serif",marginTop:2}}>{["A","B","C","D"][i]}</span>
                       <span style={{flex:1}}>{opt}</span>
                     </button>
                   );
@@ -1564,7 +1564,7 @@ export default function App(){
               </div>
 
               {answered&&(
-                <div style={{marginTop:"0.85rem",borderRadius:10,padding:"0.7rem 0.875rem",fontSize:"0.82rem",lineHeight:1.72,background:sel===cq.answer?T.greenBg:T.redBg,border:`1px solid ${sel===cq.answer?"#86efac":"#fca5a5"}`}}>
+                <div style={{marginTop:"0.85rem",borderRadius:10,padding:"0.7rem 0.875rem",fontSize:"0.82rem",lineHeight:1.72,background:sel===cq.answer?T.greenBg:T.redBg,border:`1px solid ${sel===cq.answer?T.green:T.red}`}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.2rem"}}>
                     <div style={{display:"flex",alignItems:"center",gap:"0.4rem"}}>
                       <span style={{fontWeight:700,fontSize:"0.86rem",color:sel===cq.answer?T.green:T.red}}>{sel===cq.answer?"✓ 答對了！":"✗ 答錯了"}</span>
