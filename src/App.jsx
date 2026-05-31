@@ -697,6 +697,15 @@ function Star({t}){
   return <span style={{color:c,fontSize:"0.9rem",filter:t!=="e"?`drop-shadow(0 0 3px ${c}99)`:"none"}}>{t==="e"?"☆":"★"}</span>
 }
 
+const MILESTONE_LABELS={
+  FIRST_DAY:"第一天",
+  DAY_100:"第100天",
+  ONE_YEAR:"一週年",
+  TWO_YEAR:"兩週年",
+  QUESTIONS_1000:"累積1000題",
+  QUESTIONS_5000:"累積5000題",
+};
+
 // ──────────────────────────────
 // design tokens
 // ──────────────────────────────
@@ -806,6 +815,9 @@ export default function App(){
   const [journalSaving,setJournalSaving]=useState(false);
   const [cardVisible,setCardVisible]=useState(false);
   const [todayMemory,setTodayMemory]=useState(null);
+  const [journalTab,setJournalTab]=useState("all");
+  const [journalEntries,setJournalEntries]=useState([]);
+  const [journalLoading,setJournalLoading]=useState(false);
 
   const ALL_Q=QB;
 
@@ -980,6 +992,22 @@ export default function App(){
     );
     setPenguinData(prev=>({...prev,userNote:journalInput.trim()}));
     setJournalInput("");setJournalSaving(false);
+  }
+
+  async function loadJournalEntries(userId){
+    setJournalLoading(true);
+    const{data}=await supabase
+      .from("penguin_journal")
+      .select("date,penguin_note,user_note,questions_done,milestone_type")
+      .eq("user_id",userId)
+      .order("date",{ascending:false});
+    setJournalEntries(data??[]);
+    setJournalLoading(false);
+  }
+  function openJournal(){
+    setMode("journal");
+    setJournalTab("all");
+    if(userRef.current) loadJournalEntries(userRef.current.id);
   }
 
   async function handleAuth(){
@@ -1267,6 +1295,9 @@ export default function App(){
                       </button>
                     </div>
                   )}
+                  <div style={{textAlign:"right",marginTop:"0.55rem"}}>
+                    <button onClick={openJournal} style={{background:"none",border:"none",color:T.faint,fontSize:"0.7rem",cursor:"pointer",fontFamily:"'Noto Sans TC',sans-serif",padding:0,letterSpacing:"0.02em"}}>查看全部日誌 →</button>
+                  </div>
                 </>
               ):(
                 <>
@@ -1785,6 +1816,94 @@ export default function App(){
                 <button onClick={()=>setMode("filter")} style={{flex:1,padding:"0.72rem",background:"transparent",color:T.ink,border:`1.5px solid ${T.bdr}`,borderRadius:12,fontSize:"0.87rem",cursor:"pointer",fontFamily:"inherit"}}>← 回首頁</button>
                 <button onClick={()=>{setExamAnswers({});totalElapsedRef.current=0;setTotalElapsed(0);startExam();}} style={{flex:2,padding:"0.72rem",background:T.cta,color:"#ECEAE5",border:"none",borderRadius:12,fontSize:"0.87rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>再考一次 →</button>
               </div>
+            </div>
+          );
+        })()}
+
+        {/* ── 日誌列表頁 /journal ── */}
+        {mode==="journal"&&(()=>{
+          if(!user) return(
+            <div style={{...{background:T.surface,borderRadius:16,padding:"1.25rem",boxShadow:"0 2px 16px rgba(160,200,220,0.25)",border:`1px solid ${T.bdr}`,marginTop:"0.75rem"},textAlign:"center",padding:"2.5rem 1.25rem"}}>
+              <p style={{color:T.muted,fontSize:"0.9rem",fontFamily:"'Noto Serif TC',serif",margin:0}}>登入後才能查看日誌。</p>
+            </div>
+          );
+
+          let filtered=journalEntries;
+          if(journalTab==="capsule") filtered=journalEntries.filter(e=>e.user_note&&e.user_note.trim()!=="");
+          if(journalTab==="milestone") filtered=journalEntries.filter(e=>e.milestone_type);
+
+          const groupMap={};
+          const groupOrder=[];
+          filtered.forEach(e=>{
+            const[y,m]=e.date.split("-");
+            const key=`${y}年${parseInt(m)}月`;
+            if(!groupMap[key]){groupMap[key]=[];groupOrder.push(key);}
+            groupMap[key].push(e);
+          });
+
+          return(
+            <div style={{marginTop:"0.75rem"}}>
+              {/* 頁頭 */}
+              <div style={{display:"flex",alignItems:"center",gap:"0.5rem",marginBottom:"0.875rem"}}>
+                <button onClick={()=>setMode("filter")} style={{background:"none",border:"none",color:T.muted,fontSize:"0.82rem",cursor:"pointer",fontFamily:"inherit",padding:"0.2rem 0.4rem",lineHeight:1}}>← 返回</button>
+                <span style={{fontSize:"1rem",fontWeight:500,color:T.ink,fontFamily:"'Noto Serif TC',serif"}}>全部日誌</span>
+              </div>
+
+              {/* Tab 列 */}
+              <div style={{display:"flex",gap:"0.35rem",marginBottom:"0.875rem"}}>
+                {[["all","全部日誌"],["capsule","時光膠囊"],["milestone","里程碑"]].map(([k,l])=>(
+                  <button key={k} onClick={()=>setJournalTab(k)}
+                    style={{padding:"0.3rem 0.75rem",borderRadius:100,border:`1.5px solid ${journalTab===k?"transparent":T.bdr}`,background:journalTab===k?T.accent:T.bg,color:journalTab===k?"#fff":T.muted,fontSize:"0.78rem",cursor:"pointer",fontFamily:"inherit",transition:"all 0.2s ease",whiteSpace:"nowrap",fontWeight:journalTab===k?500:400}}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+
+              {/* 內容 */}
+              {journalLoading?(
+                <p style={{color:T.faint,fontSize:"0.85rem",textAlign:"center",padding:"2.5rem 0",fontFamily:"'Noto Sans TC',sans-serif"}}>載入中…</p>
+              ):filtered.length===0?(
+                <p style={{color:T.faint,fontSize:"0.85rem",textAlign:"center",padding:"2.5rem 0",fontFamily:"'Noto Sans TC',sans-serif"}}>
+                  {journalTab==="capsule"?"尚無時光膠囊記錄。":journalTab==="milestone"?"尚無里程碑記錄。":"尚無日誌記錄。"}
+                </p>
+              ):journalTab==="milestone"?(
+                filtered.map(e=>{
+                  const d=new Date(e.date+"T00:00:00");
+                  const dateLabel=`${d.getFullYear()} 年 ${d.getMonth()+1} 月 ${d.getDate()} 日`;
+                  return(
+                    <div key={e.date} style={{background:T.goldBg,borderRadius:12,padding:"0.875rem 1rem",marginBottom:"0.6rem",border:`1px solid ${T.bdr}`,display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:"0.75rem"}}>
+                      <div>
+                        <div style={{fontSize:"0.85rem",fontWeight:600,color:T.cta,marginBottom:"0.25rem"}}>⭐ {MILESTONE_LABELS[e.milestone_type]??e.milestone_type}</div>
+                        {e.penguin_note&&<p style={{margin:0,fontSize:"0.8rem",color:T.muted,fontFamily:"'Noto Serif TC',serif",lineHeight:1.6}}>{e.penguin_note}</p>}
+                      </div>
+                      <span style={{fontSize:"0.72rem",color:T.faint,fontFamily:"'Noto Sans TC',sans-serif",flexShrink:0,paddingTop:"0.1rem"}}>{dateLabel}</span>
+                    </div>
+                  );
+                })
+              ):(
+                groupOrder.map(month=>(
+                  <div key={month} style={{marginBottom:"1.25rem"}}>
+                    <div style={{fontSize:"0.7rem",fontWeight:600,color:T.faint,letterSpacing:"0.06em",fontFamily:"Arial,sans-serif",marginBottom:"0.5rem",paddingBottom:"0.35rem",borderBottom:`1px solid ${T.bdr}`}}>{month}</div>
+                    {groupMap[month].map(e=>{
+                      const d=new Date(e.date+"T00:00:00");
+                      const dateLabel=`${d.getMonth()+1}月${d.getDate()}日`;
+                      return(
+                        <div key={e.date} style={{background:T.surface,borderRadius:12,padding:"0.875rem",marginBottom:"0.5rem",border:`1px solid ${T.bdr}`}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.4rem"}}>
+                            <span style={{fontSize:"0.75rem",color:T.muted,fontFamily:"'Noto Sans TC',sans-serif"}}>{dateLabel}</span>
+                            {e.milestone_type&&<span style={{fontSize:"0.66rem",color:T.gold,fontWeight:600,background:T.goldBg,borderRadius:100,padding:"0.08rem 0.5rem",border:`1px solid ${T.gold}`}}>⭐ {MILESTONE_LABELS[e.milestone_type]??e.milestone_type}</span>}
+                          </div>
+                          <p style={{margin:"0 0 0.3rem",fontSize:"0.88rem",lineHeight:1.7,color:T.ink,fontFamily:"'Noto Serif TC',serif",fontWeight:400}}>{e.penguin_note}</p>
+                          {e.user_note&&e.user_note.trim()&&(
+                            <p style={{margin:"0 0 0.3rem",fontSize:"0.78rem",color:T.muted,fontStyle:"italic",fontFamily:"'Noto Serif TC',serif"}}>你說：『{e.user_note}』</p>
+                          )}
+                          <div style={{fontSize:"0.7rem",color:T.faint,fontFamily:"'Noto Sans TC',sans-serif",marginTop:"0.2rem"}}>做了 <strong style={{color:T.muted}}>{e.questions_done??0}</strong> 題</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))
+              )}
             </div>
           );
         })()}
