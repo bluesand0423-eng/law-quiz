@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "export PATH=\"$HOME/.local/bin:$HOME/.local/share/uv/tools/mempalace/Scripts:$PATH\" && mempalace hook run --hook stop --harness claude-code",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
