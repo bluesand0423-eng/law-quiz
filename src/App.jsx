@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
-import { fetchProgress, upsertProgress, batchUpsertProgress, clearProgress, migrateFromLocalStorage } from "./db";
+import { fetchProgress, upsertProgress, batchUpsertProgress, clearProgress, migrateFromLocalStorage, getTodayMemory } from "./db";
 
 const LAW_PCODE_MAP = {
   "民法": "B0000001",
@@ -805,6 +805,7 @@ export default function App(){
   const [journalInput,setJournalInput]=useState("");
   const [journalSaving,setJournalSaving]=useState(false);
   const [cardVisible,setCardVisible]=useState(false);
+  const [todayMemory,setTodayMemory]=useState(null);
 
   const ALL_Q=QB;
 
@@ -966,6 +967,7 @@ export default function App(){
       totalStudyDays:stats?.total_study_days??0,
       totalQuestions:stats?.total_questions??0,
     });
+    getTodayMemory(userId).then(setTodayMemory);
     setTimeout(()=>setCardVisible(true),50);
   }
   async function saveUserNote(){
@@ -1278,6 +1280,32 @@ export default function App(){
                   </button>
                 </>
               )}
+            </div>
+          );
+        })()}
+
+        {/* ── 今日回憶 ── */}
+        {mode==="filter"&&user&&todayMemory&&(()=>{
+          const d=new Date(todayMemory.date+"T00:00:00");
+          const dateLabel=`${d.getFullYear()} 年 ${d.getMonth()+1} 月 ${d.getDate()} 日`;
+          const title=todayMemory.daysAgo===365?"翻到一年前的今天":`翻到 ${todayMemory.daysAgo} 天前`;
+          return(
+            <div style={{background:T.surface,borderRadius:16,padding:"1.25rem",boxShadow:"0 2px 16px rgba(160,200,220,0.25)",border:`1px solid ${T.bdr}`,marginTop:"0.75rem"}}>
+              <div style={{fontSize:"0.65rem",fontWeight:600,color:T.faint,letterSpacing:"0.07em",textTransform:"uppercase",fontFamily:"Arial,sans-serif",marginBottom:"0.75rem"}}>今日回憶</div>
+              <div style={{display:"flex",alignItems:"flex-start",gap:"0.75rem",marginBottom:"0.6rem"}}>
+                <span style={{fontSize:"1.9rem",lineHeight:1,flexShrink:0,opacity:0.72}}>🐧</span>
+                <div>
+                  <p style={{margin:"0 0 0.18rem",fontSize:"0.8rem",color:T.muted,fontFamily:"'Noto Sans TC',sans-serif",fontWeight:400}}>{title}</p>
+                  <p style={{margin:0,fontSize:"0.72rem",color:T.faint,fontFamily:"'Noto Sans TC',sans-serif",fontWeight:300}}>{dateLabel}</p>
+                </div>
+              </div>
+              <p style={{margin:"0 0 0.5rem",fontSize:"0.9rem",lineHeight:1.75,color:T.ink,fontFamily:"'Noto Serif TC',serif",fontWeight:400}}>{todayMemory.penguin_note}</p>
+              {todayMemory.user_note&&(
+                <p style={{margin:"0 0 0.6rem",fontSize:"0.8rem",color:T.muted,fontStyle:"italic",fontFamily:"'Noto Serif TC',serif",fontWeight:300}}>你說：『{todayMemory.user_note}』</p>
+              )}
+              <div style={{fontSize:"0.75rem",color:T.muted,fontFamily:"'Noto Sans TC',sans-serif",paddingTop:"0.6rem",borderTop:`1px solid ${T.bdr}`}}>
+                那天做了 <strong style={{color:T.ink}}>{todayMemory.questions_done??0}</strong> 題 &ensp;→&ensp; 現在累積 <strong style={{color:T.ink}}>{penguinData?.totalQuestions??0}</strong> 題
+              </div>
             </div>
           );
         })()}
