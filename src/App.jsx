@@ -701,22 +701,24 @@ function Star({t}){
 // design tokens
 // ──────────────────────────────
 const T={
-  bg:"#EDF4F8",
-  surface:"#F5F9FC",
-  surfaceDeep:"#E8F0F6",
-  bdr:"#D0E4EF",
-  ink:"#3A4A5C",
-  muted:"#7A90A4",
-  faint:"#A8BCC8",
-  accent:"#7BB8D4",
-  accentHover:"#5FA3C4",
-  green:"#7EC8A4",greenBg:"#EAF7F0",
-  red:"#E8998D",redBg:"#FDF0EE",
-  gold:"#D4A84B",goldBg:"#FDF6E3",
+  bg:"#ECEAE5",
+  surface:"#DDD9D2",
+  surfaceDeep:"#D0CBC2",
+  bdr:"#C4BEB7",
+  ink:"#383B4E",
+  muted:"#798E9D",
+  faint:"#A9A29A",
+  accent:"#798E9D",
+  accentHover:"#5F7A8A",
+  cta:"#4C3D3E",
+  ctaHover:"#3A2D2E",
+  green:"#7EC8A4",greenBg:"#C8DEDA",
+  red:"#C08070",redBg:"#E0D0CA",
+  gold:"#D4A84B",goldBg:"#E8DEC8",
   // backward-compat aliases
-  white:"#F5F9FC",
-  navy:"#3A4A5C",
-  blue:"#5FA3C4",blueBg:"#EDF4F8",
+  white:"#DDD9D2",
+  navy:"#383B4E",
+  blue:"#798E9D",blueBg:"#D0D8DC",
 };
 
 const LAW_CONFIG={
@@ -1207,22 +1209,22 @@ export default function App(){
     <div style={{fontFamily:"'Noto Sans TC','Arial',sans-serif",background:T.bg,minHeight:"100vh",color:T.ink}}>
       <style>{`.lq-btn:hover{transform:translateY(-1px);} .lq-btn{transition:all 0.2s ease;}`}</style>
       {/* header */}
-      <header style={{background:"rgba(219,236,245,0.88)",backdropFilter:"blur(12px)",padding:"0.875rem 1.125rem",position:"sticky",top:0,zIndex:20,boxShadow:"0 2px 16px rgba(160,200,220,0.3)",borderBottom:`1px solid ${T.bdr}`}}>
+      <header style={{background:"rgba(121,142,157,0.85)",backdropFilter:"blur(12px)",padding:"0.875rem 1.125rem",position:"sticky",top:0,zIndex:20,boxShadow:"0 2px 16px rgba(56,59,78,0.18)",borderBottom:"1px solid rgba(236,234,229,0.18)"}}>
         <div style={{maxWidth:660,margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
-            <div style={{fontSize:"0.58rem",letterSpacing:"0.14em",color:T.muted,textTransform:"uppercase",fontFamily:"'Noto Sans TC',sans-serif",marginBottom:2}}>
+            <div style={{fontSize:"0.58rem",letterSpacing:"0.14em",color:"rgba(236,234,229,0.65)",textTransform:"uppercase",fontFamily:"'Noto Sans TC',sans-serif",marginBottom:2}}>
               {[cat,yr].filter(v=>v!=="全部").join("・") || "國家考試題庫練習"}
             </div>
-            <h1 style={{margin:0,fontSize:"1.15rem",fontWeight:500,color:T.ink,letterSpacing:"0.02em",fontFamily:"'Noto Serif TC',serif"}}>法律練功房 <span style={{fontSize:"0.65rem",fontWeight:300,opacity:0.5,fontFamily:"'Noto Sans TC',sans-serif"}}>v14.5</span></h1>
+            <h1 style={{margin:0,fontSize:"1.15rem",fontWeight:500,color:"#ECEAE5",letterSpacing:"0.02em",fontFamily:"'Noto Serif TC',serif"}}>法律練功房 <span style={{fontSize:"0.65rem",fontWeight:300,opacity:0.55,fontFamily:"'Noto Sans TC',sans-serif"}}>v14.5</span></h1>
           </div>
           <div style={{display:"flex",gap:"0.4rem",alignItems:"center"}}>
             {(mode==="quiz"||mode==="exam")&&cq&&(
-              <button onClick={openDrawer} style={{padding:"0.25rem 0.6rem",background:T.accent,color:"#fff",border:"none",borderRadius:100,fontSize:"0.75rem",fontWeight:500,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>⚖ 法條</button>
+              <button onClick={openDrawer} style={{padding:"0.25rem 0.6rem",background:"rgba(236,234,229,0.18)",color:"#ECEAE5",border:"1px solid rgba(236,234,229,0.3)",borderRadius:100,fontSize:"0.75rem",fontWeight:500,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>⚖ 法條</button>
             )}
             {[{n:mastered,l:"精熟"},{n:practiced,l:"練習"},{n:totalQ,l:"題數"}].map(({n,l})=>(
-              <div key={l} style={{background:"rgba(123,184,212,0.12)",borderRadius:8,padding:"0.22rem 0.55rem",textAlign:"center",minWidth:40,border:`1px solid ${T.bdr}`}}>
-                <span style={{display:"block",fontSize:"0.9rem",fontWeight:500,color:T.accent,lineHeight:1.1}}>{n}</span>
-                <span style={{display:"block",fontSize:"0.56rem",color:T.faint,fontFamily:"'Noto Sans TC',sans-serif"}}>{l}</span>
+              <div key={l} style={{background:"rgba(236,234,229,0.12)",borderRadius:8,padding:"0.22rem 0.55rem",textAlign:"center",minWidth:40,border:"1px solid rgba(236,234,229,0.2)"}}>
+                <span style={{display:"block",fontSize:"0.9rem",fontWeight:500,color:"#ECEAE5",lineHeight:1.1}}>{n}</span>
+                <span style={{display:"block",fontSize:"0.56rem",color:"rgba(236,234,229,0.6)",fontFamily:"'Noto Sans TC',sans-serif"}}>{l}</span>
               </div>
             ))}
           </div>
@@ -1271,7 +1273,7 @@ export default function App(){
                     <p style={{margin:0,fontSize:"0.88rem",lineHeight:1.75,color:T.muted,fontFamily:"'Noto Serif TC',serif",fontWeight:400}}>登入後，<br/>企鵝會記得你每一天的努力。</p>
                   </div>
                   <button onClick={()=>setShowAuth(v=>!v)} className="lq-btn"
-                    style={{width:"100%",padding:"0.55rem",background:T.accent,color:"#fff",border:"none",borderRadius:10,fontSize:"0.85rem",fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>
+                    style={{width:"100%",padding:"0.55rem",background:T.cta,color:"#ECEAE5",border:"none",borderRadius:10,fontSize:"0.85rem",fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>
                     登入 / 註冊
                   </button>
                 </>
@@ -1348,13 +1350,13 @@ export default function App(){
 
             {/* 繼續測驗（僅在有未完成輪次時顯示） */}
             {sessionExists&&(
-              <button onClick={continueSession} style={{width:"100%",marginBottom:"0.5rem",padding:"0.85rem",background:T.accent,color:"#fff",border:"none",borderRadius:12,fontSize:"0.95rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",letterSpacing:"0.02em"}}>
+              <button onClick={continueSession} style={{width:"100%",marginBottom:"0.5rem",padding:"0.85rem",background:T.cta,color:"#ECEAE5",border:"none",borderRadius:12,fontSize:"0.95rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",letterSpacing:"0.02em"}}>
                 ▶ 繼續上次測驗
               </button>
             )}
 
             {/* 開始練習 */}
-            <button onClick={start} disabled={!filtered.length} style={{width:"100%",padding:"0.85rem",background:filtered.length?T.navy:"#ccc",color:"#fff",border:"none",borderRadius:12,fontSize:"0.95rem",fontWeight:700,cursor:filtered.length?"pointer":"not-allowed",fontFamily:"inherit"}}>
+            <button onClick={start} disabled={!filtered.length} style={{width:"100%",padding:"0.85rem",background:filtered.length?T.cta:"#C4BEB7",color:"#ECEAE5",border:"none",borderRadius:12,fontSize:"0.95rem",fontWeight:700,cursor:filtered.length?"pointer":"not-allowed",fontFamily:"inherit"}}>
               開始練習 →
             </button>
 
@@ -1369,7 +1371,7 @@ export default function App(){
             </div>
 
             {/* 考試模式 */}
-            <button onClick={()=>setMode("examSetup")} disabled={!filtered.length} style={{width:"100%",marginTop:"0.5rem",padding:"0.72rem",background:filtered.length?"#1e3a5f":"#ccc",color:"#fff",border:"none",borderRadius:12,fontSize:"0.88rem",fontWeight:600,cursor:filtered.length?"pointer":"not-allowed",fontFamily:"inherit",letterSpacing:"0.03em"}}>
+            <button onClick={()=>setMode("examSetup")} disabled={!filtered.length} style={{width:"100%",marginTop:"0.5rem",padding:"0.72rem",background:filtered.length?T.cta:"#C4BEB7",color:"#ECEAE5",border:"none",borderRadius:12,fontSize:"0.88rem",fontWeight:600,cursor:filtered.length?"pointer":"not-allowed",fontFamily:"inherit",letterSpacing:"0.03em"}}>
               ✦ 考試模式（設定範圍）
             </button>
 
@@ -1413,7 +1415,7 @@ export default function App(){
                         style={{width:"100%",padding:"0.42rem 0.6rem",borderRadius:8,border:`1.5px solid ${T.bdr}`,fontSize:"0.82rem",fontFamily:"inherit",boxSizing:"border-box",marginBottom:"0.4rem",outline:"none"}}/>
                       {authError&&<div style={{fontSize:"0.72rem",color:T.red,marginBottom:"0.35rem"}}>{authError}</div>}
                       <button onClick={handleAuth} disabled={authLoading||!authEmail||!authPw}
-                        style={{width:"100%",padding:"0.52rem",background:authLoading||!authEmail||!authPw?"#ccc":T.navy,color:"#fff",border:"none",borderRadius:8,fontSize:"0.82rem",fontWeight:700,cursor:authLoading?"wait":"pointer",fontFamily:"inherit"}}>
+                        style={{width:"100%",padding:"0.52rem",background:authLoading||!authEmail||!authPw?"#C4BEB7":T.cta,color:"#ECEAE5",border:"none",borderRadius:8,fontSize:"0.82rem",fontWeight:700,cursor:authLoading?"wait":"pointer",fontFamily:"inherit"}}>
                         {authLoading?"處理中…":authMode==="login"?"登入":"建立帳號"}
                       </button>
                     </div>
@@ -1507,7 +1509,7 @@ export default function App(){
               <span style={{marginLeft:"0.4rem",color:T.gold}}>（{Math.min(examFiltered.length,75)*2} 分滿分）</span>
             </div>
 
-            <button onClick={startExam} disabled={!examFiltered.length} style={{width:"100%",padding:"0.85rem",background:examFiltered.length?"#1e3a5f":"#ccc",color:"#fff",border:"none",borderRadius:12,fontSize:"0.95rem",fontWeight:700,cursor:examFiltered.length?"pointer":"not-allowed",fontFamily:"inherit",letterSpacing:"0.03em"}}>
+            <button onClick={startExam} disabled={!examFiltered.length} style={{width:"100%",padding:"0.85rem",background:examFiltered.length?T.cta:"#C4BEB7",color:"#ECEAE5",border:"none",borderRadius:12,fontSize:"0.95rem",fontWeight:700,cursor:examFiltered.length?"pointer":"not-allowed",fontFamily:"inherit",letterSpacing:"0.03em"}}>
               開始考試 →
             </button>
           </div>
@@ -1534,7 +1536,7 @@ export default function App(){
                   {getStars(prog,cq.id).map((t,i)=><Star key={i} t={t}/>)}
                 </div>
                 <div style={{display:"flex",gap:"0.3rem",alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end"}}>
-                  <button onClick={openDrawer} style={{padding:"0.22rem 0.6rem",fontSize:"0.65rem",background:"#1a56db",color:"#fff",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"Arial,sans-serif",fontWeight:700,letterSpacing:"0.04em"}}>條文</button>
+                  <button onClick={openDrawer} style={{padding:"0.22rem 0.6rem",fontSize:"0.65rem",background:T.accent,color:"#fff",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"Arial,sans-serif",fontWeight:700,letterSpacing:"0.04em"}}>條文</button>
                   <button onClick={()=>toggleBookmark(cq.id)} title={bookmarks.has(cq.id)?"取消書籤":"加入書籤"} style={{background:"none",border:"none",cursor:"pointer",fontSize:"1.1rem",padding:"0 0.1rem",lineHeight:1,opacity:bookmarks.has(cq.id)?1:0.35,transition:"opacity 0.15s"}}>◈</button>
                   <span style={{fontSize:"0.58rem",background:"#f3e8ff",color:"#7e22ce",borderRadius:4,padding:"0.08rem 0.35rem",fontFamily:"Arial,sans-serif",border:"1px solid #d8b4fe"}}>{cq.examCategory}</span>
                   <span style={{fontSize:"0.6rem",background:T.goldBg,color:T.gold,borderRadius:4,padding:"0.08rem 0.35rem",fontFamily:"Arial,sans-serif",border:`1px solid #f0d080`}}>{cq.year}</span>
@@ -1580,7 +1582,7 @@ export default function App(){
                   <button onClick={prev} style={{flex:1,padding:"0.72rem",background:"transparent",color:T.ink,border:`1.5px solid ${T.bdr}`,borderRadius:12,fontSize:"0.87rem",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>← 上一題</button>
                 )}
                 {answered
-                  ?<button onClick={next} style={{flex:2,padding:"0.72rem",background:T.navy,color:"#fff",border:"none",borderRadius:12,fontSize:"0.87rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>{qi+1>=queue.length?"查看結果 →":"下一題 →"}</button>
+                  ?<button onClick={next} style={{flex:2,padding:"0.72rem",background:T.cta,color:"#ECEAE5",border:"none",borderRadius:12,fontSize:"0.87rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>{qi+1>=queue.length?"查看結果 →":"下一題 →"}</button>
                   :<div style={{flex:2}}/>
                 }
               </div>
@@ -1623,7 +1625,7 @@ export default function App(){
             </div>
             <div style={{display:"flex",gap:"0.5rem"}}>
               <button onClick={()=>setMode("filter")} style={{flex:1,padding:"0.72rem",background:"transparent",color:T.ink,border:`1.5px solid ${T.bdr}`,borderRadius:12,fontSize:"0.87rem",cursor:"pointer",fontFamily:"inherit"}}>← 回首頁</button>
-              <button onClick={()=>{clearSession();setSessionExists(false);totalElapsedRef.current=0;setTotalElapsed(0);start();}} style={{flex:2,padding:"0.72rem",background:T.navy,color:"#fff",border:"none",borderRadius:12,fontSize:"0.87rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>再練一輪 →</button>
+              <button onClick={()=>{clearSession();setSessionExists(false);totalElapsedRef.current=0;setTotalElapsed(0);start();}} style={{flex:2,padding:"0.72rem",background:T.cta,color:"#ECEAE5",border:"none",borderRadius:12,fontSize:"0.87rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>再練一輪 →</button>
             </div>
           </div>
         )}
@@ -1631,8 +1633,8 @@ export default function App(){
         {mode==="exam"&&cq&&(
           <div>
             <div style={{marginTop:"0.75rem"}}>
-              <div style={{height:4,background:T.bdr,borderRadius:4,overflow:"hidden"}}>
-                <div style={{height:"100%",background:"#1e3a5f",borderRadius:4,width:`${(qi+1)/queue.length*100}%`,transition:"width 0.3s"}}/>
+              <div style={{height:5,background:T.bdr,borderRadius:100,overflow:"hidden"}}>
+                <div style={{height:"100%",background:T.accent,borderRadius:100,width:`${(qi+1)/queue.length*100}%`,transition:"width 0.4s ease"}}/>
               </div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:"0.2rem"}}>
                 <div style={{fontSize:"0.66rem",color:T.muted,fontFamily:"Arial,sans-serif"}}>
@@ -1647,7 +1649,7 @@ export default function App(){
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"0.75rem"}}>
                 <div style={{fontSize:"0.72rem",color:T.muted,fontFamily:"Arial,sans-serif"}}>{cq.subject}</div>
                 <div style={{display:"flex",gap:"0.3rem",alignItems:"center"}}>
-                  <button onClick={openDrawer} style={{padding:"0.22rem 0.6rem",fontSize:"0.65rem",background:"#1a56db",color:"#fff",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"Arial,sans-serif",fontWeight:700,letterSpacing:"0.04em"}}>條文</button>
+                  <button onClick={openDrawer} style={{padding:"0.22rem 0.6rem",fontSize:"0.65rem",background:T.accent,color:"#fff",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"Arial,sans-serif",fontWeight:700,letterSpacing:"0.04em"}}>條文</button>
                   <span style={{fontSize:"0.58rem",background:T.goldBg,color:T.gold,borderRadius:4,padding:"0.06rem 0.28rem",fontFamily:"Arial,sans-serif",border:`1px solid #f0d080`}}>{cq.year}</span>
                   <span style={{fontSize:"0.58rem",background:"#f3e8ff",color:"#7e22ce",borderRadius:4,padding:"0.06rem 0.28rem",fontFamily:"Arial,sans-serif",border:"1px solid #d8b4fe"}}>{cq.examCategory}</span>
                 </div>
@@ -1659,8 +1661,8 @@ export default function App(){
                 {cq.options.map((opt,i)=>{
                   const isSelected=sel===i;
                   return(
-                    <button key={i} onClick={()=>handleExamAns(i)} disabled={answered} style={{display:"flex",alignItems:"flex-start",gap:"0.62rem",padding:"0.78rem 0.9rem",background:isSelected?"#e8edf5":"#f9f8f5",border:`1.5px solid ${isSelected?"#1e3a5f":T.bdr}`,borderRadius:12,textAlign:"left",cursor:answered?"default":"pointer",fontFamily:"inherit",fontSize:"0.87rem",color:isSelected?"#1e3a5f":T.ink,fontWeight:isSelected?600:400,lineHeight:1.58,width:"100%",boxSizing:"border-box",transition:"all 0.12s"}}>
-                      <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:22,height:22,borderRadius:"50%",background:isSelected?"#1e3a5f":T.bdr,color:isSelected?"#fff":T.navy,fontSize:"0.67rem",fontWeight:700,flexShrink:0,fontFamily:"Arial,sans-serif",marginTop:2}}>{["A","B","C","D"][i]}</span>
+                    <button key={i} onClick={()=>handleExamAns(i)} disabled={answered} style={{display:"flex",alignItems:"flex-start",gap:"0.62rem",padding:"0.78rem 0.9rem",background:isSelected?T.surfaceDeep:T.surface,border:`1.5px solid ${isSelected?T.cta:T.bdr}`,borderLeft:`3px solid ${isSelected?T.cta:T.bdr}`,borderRadius:10,textAlign:"left",cursor:answered?"default":"pointer",fontFamily:"inherit",fontSize:"0.87rem",color:isSelected?T.cta:T.ink,fontWeight:isSelected?500:400,lineHeight:1.58,width:"100%",boxSizing:"border-box",transition:"all 0.2s ease"}}>
+                      <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:22,height:22,borderRadius:"50%",background:isSelected?T.cta:T.bdr,color:isSelected?"#ECEAE5":T.faint,fontSize:"0.67rem",fontWeight:600,flexShrink:0,fontFamily:"'Noto Sans TC',sans-serif",marginTop:2}}>{["A","B","C","D"][i]}</span>
                       <span style={{flex:1}}>{opt}</span>
                     </button>
                   );
@@ -1680,7 +1682,7 @@ export default function App(){
                   <button onClick={examPrev} style={{flex:1,padding:"0.72rem",background:"transparent",color:T.ink,border:`1.5px solid ${T.bdr}`,borderRadius:12,fontSize:"0.87rem",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>← 上一題</button>
                 )}
                 {answered
-                  ?<button onClick={examNext} style={{flex:2,padding:"0.72rem",background:"#1e3a5f",color:"#fff",border:"none",borderRadius:12,fontSize:"0.87rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>{qi+1>=queue.length?"交卷 →":"下一題 →"}</button>
+                  ?<button onClick={examNext} style={{flex:2,padding:"0.72rem",background:T.cta,color:"#ECEAE5",border:"none",borderRadius:12,fontSize:"0.87rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>{qi+1>=queue.length?"交卷 →":"下一題 →"}</button>
                   :<div style={{flex:2}}/>
                 }
               </div>
@@ -1709,7 +1711,7 @@ export default function App(){
             <div style={card}>
               <div style={{textAlign:"center",marginBottom:"1.1rem",paddingBottom:"0.875rem",borderBottom:`1px solid ${T.bdr}`}}>
                 <div style={{fontSize:"0.65rem",letterSpacing:"0.12em",textTransform:"uppercase",color:T.muted,fontFamily:"Arial,sans-serif",marginBottom:"0.3rem"}}>考試結算</div>
-                <div style={{fontSize:"2.8rem",fontWeight:700,color:"#1e3a5f",lineHeight:1,marginBottom:"0.2rem"}}>{totalScore}</div>
+                <div style={{fontSize:"2.8rem",fontWeight:700,color:T.ink,lineHeight:1,marginBottom:"0.2rem"}}>{totalScore}</div>
                 <div style={{fontSize:"0.82rem",color:T.muted,fontFamily:"Arial,sans-serif"}}>/ {fullScore} 分 &ensp;·&ensp; 答對 {correct} / {totalQ} 題 &ensp;·&ensp; 正確率 {pct}%</div>
                 <div style={{fontSize:"0.72rem",color:T.muted,fontFamily:"Arial,sans-serif",marginTop:"0.2rem"}}>◷ 作答時長 {fmtTime(totalElapsed)}</div>
               </div>
@@ -1722,7 +1724,7 @@ export default function App(){
                     <span style={{fontSize:"0.82rem",color:T.ink}}>{subj}</span>
                     <div style={{display:"flex",alignItems:"center",gap:"0.75rem"}}>
                       <span style={{fontSize:"0.76rem",color:T.muted,fontFamily:"Arial,sans-serif"}}>{c}/{total} 題</span>
-                      <span style={{fontSize:"0.82rem",fontWeight:600,color:"#1e3a5f",minWidth:"2.8rem",textAlign:"right"}}>{c*scorePerQ} 分</span>
+                      <span style={{fontSize:"0.82rem",fontWeight:600,color:T.ink,minWidth:"2.8rem",textAlign:"right"}}>{c*scorePerQ} 分</span>
                     </div>
                   </div>
                 ))}
@@ -1753,7 +1755,7 @@ export default function App(){
 
               <div style={{display:"flex",gap:"0.5rem"}}>
                 <button onClick={()=>setMode("filter")} style={{flex:1,padding:"0.72rem",background:"transparent",color:T.ink,border:`1.5px solid ${T.bdr}`,borderRadius:12,fontSize:"0.87rem",cursor:"pointer",fontFamily:"inherit"}}>← 回首頁</button>
-                <button onClick={()=>{setExamAnswers({});totalElapsedRef.current=0;setTotalElapsed(0);startExam();}} style={{flex:2,padding:"0.72rem",background:"#1e3a5f",color:"#fff",border:"none",borderRadius:12,fontSize:"0.87rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>再考一次 →</button>
+                <button onClick={()=>{setExamAnswers({});totalElapsedRef.current=0;setTotalElapsed(0);startExam();}} style={{flex:2,padding:"0.72rem",background:T.cta,color:"#ECEAE5",border:"none",borderRadius:12,fontSize:"0.87rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>再考一次 →</button>
               </div>
             </div>
           );
@@ -1798,7 +1800,7 @@ export default function App(){
                     const active=drawerLaw?.pcode===law.pcode;
                     return(
                       <button key={law.pcode} onClick={()=>{setDrawerLaw(law);setDrawerLawInput("");}}
-                        style={{padding:"0.28rem 0.65rem",borderRadius:100,border:`1.5px solid ${active?"#1a56db":T.bdr}`,background:active?"#1a56db":"transparent",color:active?"#fff":T.ink,fontSize:"0.74rem",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",fontWeight:active?700:400,flexShrink:0,transition:"all 0.12s"}}>
+                        style={{padding:"0.28rem 0.65rem",borderRadius:100,border:`1.5px solid ${active?T.accent:T.bdr}`,background:active?T.accent:"transparent",color:active?"#fff":T.ink,fontSize:"0.74rem",cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",fontWeight:active?700:400,flexShrink:0,transition:"all 0.12s"}}>
                         {law.name}
                       </button>
                     );
@@ -1839,7 +1841,7 @@ export default function App(){
                   )}
                 </div>
                 <div style={{fontSize:"0.7rem",color:"#888",marginTop:"0.22rem",fontFamily:"Arial,sans-serif"}}>查詢 pcode 方式：至 law.moj.gov.tw 搜尋該法規名稱，進入後複製網址列中 pcode= 後面的英數代碼（例：土地法的 pcode 為 D0060001）</div>
-                <button onClick={()=>window.open("https://law.moj.gov.tw","_blank","noopener")} style={{fontSize:"0.7rem",color:"#1a56db",background:"transparent",border:"none",cursor:"pointer",padding:0,textDecoration:"underline",marginTop:"0.18rem"}}>前往官網查詢 pcode →</button>
+                <button onClick={()=>window.open("https://law.moj.gov.tw","_blank","noopener")} style={{fontSize:"0.7rem",color:T.accent,background:"transparent",border:"none",cursor:"pointer",padding:0,textDecoration:"underline",marginTop:"0.18rem"}}>前往官網查詢 pcode →</button>
               </div>
               {/* 目前選取 */}
               {(drawerLaw||drawerLawInput)&&(
@@ -1857,7 +1859,7 @@ export default function App(){
                     onKeyDown={e=>{if(e.key==="Enter"&&canQuery)handleDrawerQuery();}}
                     style={{flex:1,padding:"0.48rem 0.7rem",borderRadius:8,border:`1.5px solid ${T.bdr}`,fontSize:"0.95rem",fontFamily:"inherit",color:T.ink,outline:"none",boxSizing:"border-box"}}/>
                   <button onClick={handleDrawerQuery} disabled={!canQuery}
-                    style={{padding:"0.48rem 1rem",background:canQuery?"#1a56db":"#ccc",color:"#fff",border:"none",borderRadius:8,fontSize:"0.82rem",cursor:canQuery?"pointer":"not-allowed",fontFamily:"inherit",fontWeight:700,whiteSpace:"nowrap",transition:"background 0.15s"}}>前往官網查看 →</button>
+                    style={{padding:"0.48rem 1rem",background:canQuery?T.accent:"#ccc",color:"#fff",border:"none",borderRadius:8,fontSize:"0.82rem",cursor:canQuery?"pointer":"not-allowed",fontFamily:"inherit",fontWeight:700,whiteSpace:"nowrap",transition:"background 0.15s"}}>前往官網查看 →</button>
                 </div>
               </div>
             </div>
