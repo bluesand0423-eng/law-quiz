@@ -977,13 +977,14 @@ export default function App(){
     await saveDailyJournal(userId);
     const[{data:journal2},{data:stats2}]=await Promise.all([
       supabase.from("penguin_journal").select("penguin_note,user_note").eq("user_id",userId).eq("date",today).maybeSingle(),
-      supabase.from("user_stats").select("total_study_days,total_questions").eq("user_id",userId).maybeSingle(),
+      supabase.from("user_stats").select("total_study_days,total_questions,days_together").eq("user_id",userId).maybeSingle(),
     ]);
     setPenguinData({
       penguinNote:journal2?.penguin_note??"今天也一起努力了。",
       userNote:journal2?.user_note??null,
       totalStudyDays:stats2?.total_study_days??0,
       totalQuestions:stats2?.total_questions??0,
+      daysTogether:Math.max(1,stats2?.days_together??1),
     });
     getTodayMemory(userId).then(setTodayMemory);
     setTimeout(()=>setCardVisible(true),50);
@@ -1047,6 +1048,7 @@ export default function App(){
       setSessionExists(true);
     }
     setMode("filter");
+    if(userRef.current)loadPenguinData(userRef.current.id);
   }
 
   const start=useCallback(()=>{
@@ -1689,7 +1691,7 @@ export default function App(){
               })}
             </div>
             <div style={{display:"flex",gap:"0.5rem"}}>
-              <button onClick={()=>setMode("filter")} style={{flex:1,padding:"0.72rem",background:"transparent",color:T.ink,border:`1.5px solid ${T.bdr}`,borderRadius:12,fontSize:"0.87rem",cursor:"pointer",fontFamily:"inherit"}}>← 回首頁</button>
+              <button onClick={()=>{setMode("filter");if(userRef.current)loadPenguinData(userRef.current.id);}} style={{flex:1,padding:"0.72rem",background:"transparent",color:T.ink,border:`1.5px solid ${T.bdr}`,borderRadius:12,fontSize:"0.87rem",cursor:"pointer",fontFamily:"inherit"}}>← 回首頁</button>
               <button onClick={()=>{clearSession();setSessionExists(false);totalElapsedRef.current=0;setTotalElapsed(0);start();}} style={{flex:2,padding:"0.72rem",background:T.cta,color:"#ECEAE5",border:"none",borderRadius:12,fontSize:"0.87rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>再練一輪 →</button>
             </div>
           </div>
