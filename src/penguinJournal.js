@@ -54,20 +54,33 @@ export async function saveDailyJournal(
 
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
+  const payload = {
+    user_id: userId,
+    date: today,
+    penguin_note: penguinNote,
+  };
+  if (questionsToday > 0) payload.questions_done = questionsToday;
+  if (minutesSpent > 0) payload.minutes_spent = minutesSpent;
+  if (fishEarned > 0) payload.fish_earned = fishEarned;
+  if (userNote !== null && userNote !== undefined) payload.user_note = userNote;
+
   const { error } = await supabase.from("penguin_journal").upsert(
-    {
-      user_id: userId,
-      date: today,
-      questions_done: questionsToday,
-      minutes_spent: minutesSpent,
-      fish_earned: fishEarned,
-      penguin_note: penguinNote,
-      user_note: userNote,
-    },
+    payload,
     { onConflict: "user_id,date" }
   );
 
   return { penguinNote, error };
+}
+
+// ── getMilestoneType ─────────────────────────────────────────────
+function getMilestoneType(prevDays, newDays, prevQ, newQ) {
+  if (prevDays < 1   && newDays >= 1)   return "FIRST_DAY";
+  if (prevDays < 100 && newDays >= 100) return "DAY_100";
+  if (prevDays < 365 && newDays >= 365) return "ONE_YEAR";
+  if (prevDays < 730 && newDays >= 730) return "TWO_YEAR";
+  if (prevQ < 1000   && newQ >= 1000)   return "QUESTIONS_1000";
+  if (prevQ < 5000   && newQ >= 5000)   return "QUESTIONS_5000";
+  return null;
 }
 
 // ── updateUserStats ──────────────────────────────────────────────
@@ -79,15 +92,17 @@ export async function updateUserStats(userId, questionsToday) {
 
   const firstLoginAt = existing?.first_login_at ?? now.toISOString();
 
+  const prevStudyDays = existing?.total_study_days ?? 0;
+  const prevQuestions = existing?.total_questions ?? 0;
+
   // total_study_days: 同一天重複呼叫不重複計算
   const lastLoginDateStr = existing?.last_login_at
     ? new Date(existing.last_login_at).toISOString().slice(0, 10)
     : null;
   const isNewDay = lastLoginDateStr !== todayStr;
-  const totalStudyDays = (existing?.total_study_days ?? 0) +
-    (isNewDay && questionsToday > 0 ? 1 : 0);
+  const totalStudyDays = prevStudyDays + (isNewDay && questionsToday > 0 ? 1 : 0);
 
-  const totalQuestions = (existing?.total_questions ?? 0) + questionsToday;
+  const totalQuestions = prevQuestions + questionsToday;
 
   const daysTogether = Math.floor(
     (now.getTime() - new Date(firstLoginAt).getTime()) / (1000 * 60 * 60 * 24)
@@ -104,6 +119,28 @@ export async function updateUserStats(userId, questionsToday) {
     },
     { onConflict: "user_id" }
   );
+
+  if (!error && questionsToday > 0) {
+    const { data: todayRow } = await supabase
+      .from("penguin_journal")
+      .select("questions_done")
+      .eq("user_id", userId)
+      .eq("date", todayStr)
+      .maybeSingle();
+    const currentCount = todayRow?.questions_done ?? 0;
+    await supabase.from("penguin_journal").upsert(
+      { user_id: userId, date: todayStr, questions_done: currentCount + questionsToday },
+      { onConflict: "user_id,date" }
+    );
+  }
+
+  const milestone = getMilestoneType(prevStudyDays, totalStudyDays, prevQuestions, totalQuestions);
+  if (milestone) {
+    await supabase.from("penguin_journal").upsert(
+      { user_id: userId, date: todayStr, milestone_type: milestone },
+      { onConflict: "user_id,date" }
+    );
+  }
 
   return { error };
 }
