@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import { fetchProgress, upsertProgress, batchUpsertProgress, clearProgress, migrateFromLocalStorage, getTodayMemory } from "./db";
+import { saveDailyJournal, getPenguinNote, updateUserStats } from "./penguinJournal";
 
 const LAW_PCODE_MAP = {
   "民法": "B0000001",
@@ -969,15 +970,20 @@ export default function App(){
 
   async function loadPenguinData(userId){
     const today=new Date().toISOString().slice(0,10);
-    const[{data:journal},{data:stats}]=await Promise.all([
+    await Promise.all([
+      supabase.from("penguin_journal").select("penguin_note,user_note").eq("user_id",userId).eq("date",today).maybeSingle(),
+      supabase.from("user_stats").select("total_study_days,total_questions").eq("user_id",userId).maybeSingle(),
+    ]);
+    await saveDailyJournal(userId);
+    const[{data:journal2},{data:stats2}]=await Promise.all([
       supabase.from("penguin_journal").select("penguin_note,user_note").eq("user_id",userId).eq("date",today).maybeSingle(),
       supabase.from("user_stats").select("total_study_days,total_questions").eq("user_id",userId).maybeSingle(),
     ]);
     setPenguinData({
-      penguinNote:journal?.penguin_note??"今天也一起努力了。",
-      userNote:journal?.user_note??null,
-      totalStudyDays:stats?.total_study_days??0,
-      totalQuestions:stats?.total_questions??0,
+      penguinNote:journal2?.penguin_note??"今天也一起努力了。",
+      userNote:journal2?.user_note??null,
+      totalStudyDays:stats2?.total_study_days??0,
+      totalQuestions:stats2?.total_questions??0,
     });
     getTodayMemory(userId).then(setTodayMemory);
     setTimeout(()=>setCardVisible(true),50);
@@ -987,7 +993,7 @@ export default function App(){
     setJournalSaving(true);
     const today=new Date().toISOString().slice(0,10);
     await supabase.from("penguin_journal").upsert(
-      {user_id:userRef.current.id,date:today,user_note:journalInput.trim()},
+      {user_id:userRef.current.id,date:today,user_note:journalInput.trim(),penguin_note:penguinData?.penguinNote??"今天也一起努力了。"},
       {onConflict:"user_id,date"}
     );
     setPenguinData(prev=>({...prev,userNote:journalInput.trim()}));
@@ -1144,7 +1150,7 @@ export default function App(){
     else{if(stars.some(s=>s==="g")){stars=["e","e","e","e","e"];}else{const idx=stars.findIndex(s=>s!=="r");if(idx!==-1)stars[idx]="r";}}
     const np={...prog,[id]:{...prev,stars,attempts:prev.attempts+1}};
     setProg(np);save(np);
-    if(userRef.current)upsertProgress(userRef.current.id,id,stars,np[id].attempts);
+    if(userRef.current){upsertProgress(userRef.current.id,id,stars,np[id].attempts);updateUserStats(userRef.current.id,1);}
     const cfg=LAW_CONFIG[cq.subject];
     if(cfg&&!drawerLaw)setDrawerLaw(cfg);
     setDrawerOpen(true);
