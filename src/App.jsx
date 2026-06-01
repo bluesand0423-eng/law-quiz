@@ -819,6 +819,7 @@ export default function App(){
   const [journalTab,setJournalTab]=useState("all");
   const [journalEntries,setJournalEntries]=useState([]);
   const [journalLoading,setJournalLoading]=useState(false);
+  const [journeyData,setJourneyData]=useState(null);
 
   const ALL_Q=QB;
 
@@ -1015,6 +1016,20 @@ export default function App(){
     setMode("journal");
     setJournalTab("all");
     if(userRef.current) loadJournalEntries(userRef.current.id);
+  }
+
+  async function loadJourneyData(userId){
+    const[{data:stats},{data:milestonesData}]=await Promise.all([
+      supabase.from("user_stats").select("first_login_at,total_study_days,total_questions,days_together").eq("user_id",userId).maybeSingle(),
+      supabase.from("penguin_journal").select("date,milestone_type").eq("user_id",userId).not("milestone_type","is",null).order("date",{ascending:true}),
+    ]);
+    setJourneyData({
+      firstLoginAt:stats?.first_login_at??null,
+      totalStudyDays:stats?.total_study_days??0,
+      totalQuestions:stats?.total_questions??0,
+      daysTogether:Math.max(1,stats?.days_together??1),
+      milestones:milestonesData??[],
+    });
   }
 
   async function handleAuth(){
@@ -1303,8 +1318,9 @@ export default function App(){
                       </button>
                     </div>
                   )}
-                  <div style={{textAlign:"right",marginTop:"0.55rem"}}>
+                  <div style={{display:"flex",justifyContent:"flex-end",gap:"0.75rem",marginTop:"0.55rem"}}>
                     <button onClick={openJournal} style={{background:"none",border:"none",color:T.faint,fontSize:"0.7rem",cursor:"pointer",fontFamily:"'Noto Sans TC',sans-serif",padding:0,letterSpacing:"0.02em"}}>查看全部日誌 →</button>
+                    <button onClick={()=>{setMode("journey");if(userRef.current)loadJourneyData(userRef.current.id);}} style={{background:"none",border:"none",color:T.faint,fontSize:"0.7rem",cursor:"pointer",fontFamily:"'Noto Sans TC',sans-serif",padding:0,letterSpacing:"0.02em"}}>我們的旅程 →</button>
                   </div>
                 </>
               ):(
@@ -1911,6 +1927,69 @@ export default function App(){
                     })}
                   </div>
                 ))
+              )}
+            </div>
+          );
+        })()}
+
+        {mode==="journey"&&(()=>{
+          const cardStyle={background:T.surface,borderRadius:16,padding:"1.1rem 1.25rem",boxShadow:"0 2px 16px rgba(160,200,220,0.25)",border:`1px solid ${T.bdr}`,marginBottom:"1rem"};
+          if(!user) return(
+            <div style={{...cardStyle,textAlign:"center",padding:"2.5rem 1.25rem",marginTop:"0.75rem"}}>
+              <p style={{color:T.muted,fontSize:"0.9rem",fontFamily:"'Noto Serif TC',serif",margin:0}}>登入後才能查看。</p>
+            </div>
+          );
+          const fmtDate=iso=>{
+            if(!iso) return"—";
+            const[y,m,d]=iso.slice(0,10).split("-");
+            return`${y}/${m}/${d}`;
+          };
+          const MILESTONES=[
+            {key:"FIRST_DAY",   dayT:1,    qT:null},
+            {key:"DAY_100",     dayT:100,  qT:null},
+            {key:"ONE_YEAR",    dayT:365,  qT:null},
+            {key:"TWO_YEAR",    dayT:730,  qT:null},
+            {key:"QUESTIONS_1000",dayT:null,qT:1000},
+            {key:"QUESTIONS_5000",dayT:null,qT:5000},
+          ];
+          const d=journeyData;
+          return(
+            <div style={{marginTop:"0.75rem"}}>
+              <div style={{display:"flex",alignItems:"center",gap:"0.5rem",marginBottom:"0.875rem"}}>
+                <button onClick={()=>setMode("filter")} style={{background:"none",border:"none",color:T.muted,fontSize:"0.82rem",cursor:"pointer",fontFamily:"inherit",padding:"0.2rem 0.4rem",lineHeight:1}}>← 返回</button>
+                <span style={{fontSize:"1rem",fontWeight:500,color:T.ink,fontFamily:"'Noto Serif TC',serif"}}>我們的旅程</span>
+              </div>
+              {!d?(
+                <p style={{color:T.faint,fontSize:"0.85rem",textAlign:"center",padding:"2.5rem 0",fontFamily:"'Noto Sans TC',sans-serif"}}>載入中…</p>
+              ):(
+                <>
+                  <div style={cardStyle}>
+                    {[["第一次登入",fmtDate(d.firstLoginAt)],["累積學習天數",`${d.totalStudyDays} 天`],["累積完成題數",`${d.totalQuestions} 題`],["我們認識",`${d.daysTogether} 天`]].map(([label,value],i,arr)=>(
+                      <div key={label} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",padding:"0.45rem 0",borderBottom:i<arr.length-1?`1px solid ${T.bdr}`:"none"}}>
+                        <span style={{fontSize:"0.78rem",color:T.muted,fontFamily:"'Noto Sans TC',sans-serif"}}>{label}</span>
+                        <span style={{fontSize:"0.92rem",fontWeight:600,color:T.ink,fontFamily:"Arial,sans-serif"}}>{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{...cardStyle,marginBottom:0}}>
+                    <div style={{fontSize:"0.7rem",fontWeight:600,color:T.faint,letterSpacing:"0.06em",fontFamily:"Arial,sans-serif",marginBottom:"0.75rem"}}>里程碑</div>
+                    {MILESTONES.map(({key,dayT,qT},i,arr)=>{
+                      const rec=d.milestones.find(m=>m.milestone_type===key);
+                      const exceeded=dayT!=null?d.totalStudyDays>=dayT:d.totalQuestions>=qT;
+                      const achieved=!!rec||exceeded;
+                      const dateStr=rec?fmtDate(rec.date):exceeded?"（日期未記錄）":null;
+                      return(
+                        <div key={key} style={{display:"flex",alignItems:"flex-start",gap:"0.75rem",padding:"0.5rem 0",borderBottom:i<arr.length-1?`1px solid ${T.bdr}`:"none"}}>
+                          <span style={{fontSize:"0.95rem",color:achieved?T.gold:T.bdr,flexShrink:0,lineHeight:1.5}}>{achieved?"●":"○"}</span>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:"0.85rem",color:achieved?T.ink:T.faint,fontFamily:"'Noto Serif TC',serif",fontWeight:achieved?500:400}}>{MILESTONE_LABELS[key]}</div>
+                            {dateStr&&<div style={{fontSize:"0.7rem",color:T.muted,fontFamily:"'Noto Sans TC',sans-serif",marginTop:"0.1rem"}}>{dateStr}</div>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
           );
