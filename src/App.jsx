@@ -959,7 +959,7 @@ export default function App(){
       setUser(u);userRef.current=u;
       if(u){
         migrateFromLocalStorage(u.id).then(()=>
-          fetchProgress(u.id).then(remote=>setProg(remote))
+          fetchProgress(u.id).then(remote=>setProg(prev=>({...prev,...remote})))
         );
         loadPenguinData(u.id);
       }
