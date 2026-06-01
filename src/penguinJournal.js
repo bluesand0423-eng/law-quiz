@@ -54,16 +54,18 @@ export async function saveDailyJournal(
 
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
+  const payload = {
+    user_id: userId,
+    date: today,
+    penguin_note: penguinNote,
+  };
+  if (questionsToday > 0) payload.questions_done = questionsToday;
+  if (minutesSpent > 0) payload.minutes_spent = minutesSpent;
+  if (fishEarned > 0) payload.fish_earned = fishEarned;
+  if (userNote !== null && userNote !== undefined) payload.user_note = userNote;
+
   const { error } = await supabase.from("penguin_journal").upsert(
-    {
-      user_id: userId,
-      date: today,
-      questions_done: questionsToday,
-      minutes_spent: minutesSpent,
-      fish_earned: fishEarned,
-      penguin_note: penguinNote,
-      user_note: userNote,
-    },
+    payload,
     { onConflict: "user_id,date" }
   );
 
@@ -117,6 +119,20 @@ export async function updateUserStats(userId, questionsToday) {
     },
     { onConflict: "user_id" }
   );
+
+  if (!error && questionsToday > 0) {
+    const { data: todayRow } = await supabase
+      .from("penguin_journal")
+      .select("questions_done")
+      .eq("user_id", userId)
+      .eq("date", todayStr)
+      .maybeSingle();
+    const currentCount = todayRow?.questions_done ?? 0;
+    await supabase.from("penguin_journal").upsert(
+      { user_id: userId, date: todayStr, questions_done: currentCount + questionsToday },
+      { onConflict: "user_id,date" }
+    );
+  }
 
   const milestone = getMilestoneType(prevStudyDays, totalStudyDays, prevQuestions, totalQuestions);
   if (milestone) {
