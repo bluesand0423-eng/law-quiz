@@ -2,11 +2,12 @@
 
 ## 一、結論摘要
 
-1. 現況大致可進入前置施工，核心假設（題庫結構、題數、部署平台、分支策略、科目代碼）均與規劃書相符。
-2. 最嚴重的不符項：**Supabase 寫入錯誤處理全面缺失**——8 個寫入呼叫中，僅 1 個（`updateUserStats` 對 `user_stats` 的 upsert）在函式內部檢查了 `error`，其餘 7 個皆未檢查，且呼叫端（`App.jsx`）對所有寫入一律 fire-and-forget，不 await 也不檢查回傳值。
-3. `error_logs` 表確認尚不存在（規劃書假設相符）；`issues`／`statutes` 欄位確認尚未使用（規劃書假設相符），可安全新增不撞名。
-4. 版號顯示與實際 commit 進度不同步：UI 頁首硬編 `v14.5`，但 git log 最新版號 commit 為 `v14.10`，其後仍有數個未標版號的 Phase 2 commit——顯示版號已過時，非規劃書所述現況本身的問題，但屬盤點發現。
-5. Supabase 端（RLS、GRANT、schema、trigger）尚待你手動貼回 SQL Editor 查詢結果，本報告 G 節與比對表第 6、7 項暫標【待補】。
+1. **【阻斷】Supabase 專案目前處於暫停狀態**（你於補充診斷中確認）。爭點模組若涉及新表或既有表寫入，在專案恢復前皆無法實測，且比對表第 6、7、8 項與 G 節之 SQL 查詢也無法在此狀態下取得。**不應在此狀態下進入前置施工**，須先恢復 Supabase 專案。
+2. 撇開 Supabase 暫停不談，其餘核心假設（題庫結構、題數、部署平台、分支策略、科目代碼）均與規劃書相符，程式碼面準備度尚可。
+3. 次嚴重的不符項：**Supabase 寫入錯誤處理全面缺失**——8 個寫入呼叫中，僅 1 個（`updateUserStats` 對 `user_stats` 的 upsert）在函式內部檢查了 `error`，其餘 7 個皆未檢查，且呼叫端（`App.jsx`）對所有寫入一律 fire-and-forget，不 await 也不檢查回傳值。此問題與「Supabase 暫停」直接相關：專案暫停期間，所有寫入呼叫會逐一失敗，但因無錯誤處理，使用者完全不會被告知，UI 表現與正常運作時幾乎無異（見四-1 詳述）。
+4. `error_logs` 表確認尚不存在（規劃書假設相符）；`issues`／`statutes` 欄位確認尚未使用（規劃書假設相符），可安全新增不撞名。
+5. 版號顯示與實際 commit 進度不同步：UI 頁首硬編 `v14.5`，但 git log 最新版號 commit 為 `v14.10`，其後仍有數個未標版號的 Phase 2 commit——顯示版號已過時，非規劃書所述現況本身的問題，但屬盤點發現。
+6. Supabase 端（RLS、GRANT、schema、trigger）尚待你手動貼回 SQL Editor 查詢結果，且須待專案恢復後才能執行；本報告 G 節與比對表第 6、7 項暫標【待補・受阻】。
 
 ## 二、盤點結果
 
@@ -126,6 +127,45 @@
 
 **作答歷史正本**：兩者並存。登入時流程為 `migrateFromLocalStorage(u.id)` → `fetchProgress(u.id)` 後以 `{...prev, ...remote}` 合併（App.jsx:963-964），**遠端（Supabase `user_progress`）覆蓋本地**，故已登入狀態下以 **Supabase 為準**；登出時 `handleSignOut()` 執行 `setProg(load())`（App.jsx:1047）退回 localStorage 快取，此時以 **localStorage 為準**。未登入使用者僅有 localStorage，無雲端同步。
 
+#### 補充：App 啟動並登入時，作答紀錄與日誌的同步方向
+
+**答案：(c) 合併；衝突時原則上以「剛上傳後的 Supabase 內容」為準，但實際效果視上傳是否成功而定，且企鵝日誌／統計完全沒有本地備援。**分兩條資料線討論：
+
+**① 作答進度（`user_progress` ↔ `lawquiz_prog_v1`）**——App.jsx:962-967：
+```js
+if(u){
+  migrateFromLocalStorage(u.id).then(()=>
+    fetchProgress(u.id).then(remote=>setProg(prev=>({...prev,...remote})))
+  );
+  loadPenguinData(u.id);
+}
+```
+流程分三步，皆有明確行號：
+1. **上傳**：`migrateFromLocalStorage(u.id)`（db.js:71-79）讀取 `lawquiz_prog_v1`，呼叫 `batchUpsertProgress`（db.js:30-42），以 `upsert(rows,{onConflict:"user_id,question_id"})`（db.js:41）將本地資料寫入 Supabase——**同一 question_id 的本地值會覆蓋 Supabase 既有值**（因 upsert 對衝突鍵是整列取代，非欄位級合併）。此步驟無 error 檢查（E 節已列）。
+2. **下載**：接著 `fetchProgress(u.id)`（db.js:6-15）重新 `SELECT` 該使用者所有 `user_progress` 列；若 `error` 或 `!data`，**直接回傳 `{}`**（db.js:11）。
+3. **合併寫回 React state**：`setProg(prev=>({...prev,...remote}))`（App.jsx:964）——`prev` 為目前 state（初始值來自 `useState(load)`，即 localStorage，App.jsx:784），`remote` 展開在後，**逐 key 覆蓋 prev**；`remote` 中沒有的 key 則保留 `prev`（本地）原值。
+
+**衝突時以何者為準**：正常（Supabase 可連線）情況下，步驟 1 已把本地最新值寫回 Supabase，步驟 2 抓回的 `remote` 其實已內含步驟 1 剛寫入的值，因此步驟 3 的「remote 覆蓋 prev」在絕大多數 question_id 上等同「本地值原樣寫回」，只有*其他裝置*寫入、本地端沒有的 question_id 才會單純以 Supabase 為準補入。**但目前 Supabase 專案已暫停**，步驟 1 的上傳會靜默失敗、步驟 2 因連線錯誤觸發 `if (error || !data) return {}`，`remote` 變成空物件，`{...prev,...{}}` 等於沒有合併——此時退化為「完全保留本地」，效果類似 (b)，但這是 `fetchProgress` 錯誤時的防禦性回傳（`return {}`）造成的**副作用，並非刻意設計的離線合併策略**，一旦 Supabase 恢復，行為會立刻變回「遠端覆蓋本地」，需留意兩種狀態下實際合併結果不同。
+
+**② 企鵝日誌／統計（`penguin_journal`、`user_stats`）**——App.jsx:972-992 `loadPenguinData`：**沒有 localStorage 備援**，純粹是 Supabase → UI 的單向讀取（無合併、無上傳步驟）：
+```js
+async function loadPenguinData(userId){
+  ...
+  await saveDailyJournal(userId);          // App.jsx:978，寫入失敗會被靜默吞掉
+  const[{data:journal2},{data:stats2}]=await Promise.all([
+    supabase.from("penguin_journal")...,   // App.jsx:980
+    supabase.from("user_stats")...,        // App.jsx:981
+  ]);
+  setPenguinData({
+    penguinNote: journal2?.penguin_note ?? "今天也一起努力了。",
+    totalStudyDays: stats2?.total_study_days ?? 0,
+    totalQuestions: stats2?.total_questions ?? 0,
+    daysTogether: Math.max(1, stats2?.days_together ?? 1),
+  });                                        // App.jsx:983-989
+}
+```
+Supabase 暫停時，`journal2`／`stats2` 皆為 `undefined`，因此**每次登入都會顯示重置後的預設值**（累積題數 0、認識天數 1、日誌文案退回初始版本），即使資料庫裡實際仍保有累積紀錄——因為這條資料線完全無本地快取可退回，行為上與作答進度的「意外保留本地」不同，是**看起來像資料歸零、實際只是讀不到**的表現，屬於本次補充診斷「Supabase 暫停」發現的具體使用者可見症狀（詳見四-1）。
+
 **Supabase 專案 ref**：`qfkethioqskdclkzczmp`（自 `https://qfkethioqskdclkzczmp.supabase.co` 擷取，僅記錄網址子網域，未讀取 `.env` 內容或任何金鑰）。
 
 ### E. 錯誤處理現況
@@ -173,7 +213,12 @@
 
 ### G. Supabase 查詢結果
 
-**【待苳提供】** 尚未取得 SQL Editor 查詢結果，比對表第 6、7 項與本節內容暫掛。請將 6 段 SELECT 查詢結果貼回，我會補入本節與比對表。
+**【阻斷・待苳提供】Supabase 專案目前處於暫停狀態**（你於補充診斷中確認）。本次曾嘗試以唯讀 GET request 探測 `https://qfkethioqskdclkzczmp.supabase.co/rest/v1/`（純連線測試，未帶金鑰、未做任何查詢或寫入），但本機沙箱環境對外連線受限，回傳 `HTTP_STATUS:000`（無法建立連線），無法從此環境獨立佐證暫停狀態，故此項判定完全採信你的回報。
+
+在專案恢復連線前：
+- 第 3 節六段 SELECT 查詢**無法執行**，比對表第 6、7 項及 `error_logs`／schema 現況（第 8 項的資料庫面向）維持【？無法確認】。
+- App 內所有 Supabase 讀寫呼叫會逐一失敗（見四-1 對應之使用者可見症狀）。
+- 建議：**先恢復 Supabase 專案，再執行第 3 節查詢並貼回**，本報告會在取得結果後補入本節與比對表；爭點模組相關的 Phase 2.5 資料防護網施工也必須等專案恢復後才能實測寫入路徑。
 
 ## 三、假設比對表
 
@@ -184,23 +229,28 @@
 | 3 | 版號 v14.10 | ✗ | git log 最新版號 commit 為 `f1a709a v14.10`，但 UI 頁首（App.jsx:1271）硬編顯示 `v14.5`，且其後仍有多筆未標版號的 Phase 2 commit（`df020e6`、`be18009`、`2f6c33b`、`17bfb30`），實際功能進度已超前 UI 顯示版號 |
 | 4 | 部署平台為 Vercel；Netlify 已停用 | ✓ | 已提交版 CLAUDE.md 明確記載；`netlify.toml`/`vercel.json` 均不存在；git log 有 `v14: 直連官網模式，移除 Netlify Function 與設定檔` 佐證 |
 | 5 | 本地 master、遠端 main、開發分支 claude-dev | ✗（部分） | 目前分支為 `claude-dev`（相符），但本地同時存在 `main` 與 `master` 兩支（非僅 master），遠端也同時有 `origin/main`、`origin/master`、`origin/claude-dev` 三支。已提交版 CLAUDE.md 記載「在 dev 或 feature/\* 分支作業，不直接 push 至 main」，用詞是 `dev` 而非 `claude-dev`，與實際分支名不完全一致 |
-| 6 | Supabase 有 user_progress、user_stats、penguin_journal 三表，RLS 條件 auth.uid() = user_id | ？ | 待你提供 SQL Editor 查詢結果（G 節） |
-| 7 | 上述三表已補 table-level GRANT | ？ | 待你提供 SQL Editor 查詢結果（G 節） |
-| 8 | error_logs 表尚不存在 | ✓（程式碼面） | 程式碼無任何 `error_logs` 引用；資料庫是否已建表待 G 節查詢確認 |
+| 6 | Supabase 有 user_progress、user_stats、penguin_journal 三表，RLS 條件 auth.uid() = user_id | ？ | **受阻**：Supabase 專案暫停中，無法執行 SQL Editor 查詢（見 G 節），恢復連線後補查 |
+| 7 | 上述三表已補 table-level GRANT | ？ | **受阻**：同上，需專案恢復後補查 |
+| 8 | error_logs 表尚不存在 | ✓（程式碼面）／？（資料庫面） | 程式碼無任何 `error_logs` 引用；資料庫是否已建表**受 Supabase 暫停阻擋**，待 G 節查詢確認 |
 | 9 | 題目物件尚無 issues、statutes 欄位 | ✓ | 全檔搜尋無匹配，欄位清單為 `id, examCategory, year, examGroup, subject, text, options, answer, explanation, ref`（含規劃書未提及的 `ref` 欄位） |
 | 10 | 所有 Supabase 寫入皆已 await 並檢查 error | ✗ | 8 個寫入呼叫中，7 個未在任何層級檢查 error；2 個函式內部捕捉 error，但呼叫端皆未讀取回傳的 error，詳見 E 節表格 |
 | 11 | 科目代碼為 civ/cvp/cri/csp/eth/con/adm/ipub/ipriv/com/ins/neg/sec/enf/eng | ✓ | 完全相符，15 碼皆與題目 id 前綴一致 |
 
 ## 四、發現的問題
 
-1. **【阻斷／需處理】Supabase 寫入錯誤處理全面缺失**（比對表第 10 項）。所有寫入皆 fire-and-forget，使用者資料（作答進度、企鵝日誌、里程碑）在網路異常或 RLS 拒絕時會靜默遺失且 UI 無感知。爭點模組若比照現有模式寫入，會延續此風險——建議 Phase 2.5 錯誤防護網優先處理此項，而非僅新增 `error_logs` 表卻不接上既有呼叫點。
-2. **【需處理】UI 版號與 git 進度不同步**（比對表第 3 項）。App.jsx:1271 硬編 `v14.5`，落後於最新 `v14.10` commit 及其後數筆未標版號的 Phase 2 commit，可能誤導除錯或使用者回報問題時的版本判斷。
-3. **【提示】CLAUDE.md 分支敘述與實際分支名不一致**（比對表第 5 項）。已提交版寫「在 dev 或 feature/\* 分支作業」，但實際開發分支為 `claude-dev`；本地並存 `main`／`master` 兩支容易混淆推送目標。
-4. **【提示】`lawquiz_bookmarks_v1`（書籤功能）localStorage key 未記載於任一份 CLAUDE.md**。此 key 確實存在並在 App.jsx 中讀寫（686-687, 828, 850 行），屬文件缺漏而非程式問題。
-5. **【提示】題目物件多出 `ref` 欄位**，未列於規劃書原假設的欄位清單中，非所有題目使用。新增 `issues`／`statutes` 前建議一併確認 `ref` 欄位的既有用途，避免三者定義風格不一致。
-6. **【提示】配色常數命名與規劃書所述中文色名（塵可可、霧藍、砂紙、塵玫、苔綠）無法直接對應**，程式碼內僅有英文語意鍵名。F 節已提供推測對應表，但需你確認或提供設計規格來源以精確核對，尤其規劃書提及「後兩色目前為暫定值」需要修正的具體對象。
-7. **【提示】App.jsx 內存在重複硬編色碼**（如多處 `#ECEAE5` 未透過 `T.bg` 引用），與配色常數集中管理的假設精神不完全一致，但不影響本次比對結論。
-8. **【提示】`npm run build` 成功**，但有 chunk size 警告（`dist/assets/index-*.js` 634 KB，超過 500 KB 建議值），單檔 JSX 架構下屬預期現象，暫不影響爭點模組施工可行性。
+1. **【阻斷】Supabase 專案目前處於暫停狀態**（你於補充診斷中確認）。具體使用者可見症狀：
+   - 作答進度（`user_progress`）：因 `fetchProgress` 對錯誤採防禦性回傳 `{}`（db.js:11），登入時的合併步驟（App.jsx:964）等於無效，UI 上**意外地**保留 localStorage 資料，暫時看不出異常。
+   - 企鵝日誌／統計（`penguin_journal`、`user_stats`）：`loadPenguinData`（App.jsx:972-992）無本地備援，每次登入會顯示重置後的預設值（累積題數 0、認識天數 1），**看起來像資料歸零，實際上只是讀不到**——這與企鵝文案「不得表現失望、不得因未登入抱怨」的既有原則無直接牴觸（因為文案邏輯本身仍會執行，只是輸入值全為預設），但呈現的數字本身具有誤導性。
+   - 在專案恢復前，比對表第 6、7、8 項無法查證，Phase 2.5 錯誤防護網與爭點模組的寫入路徑也無法實測。
+   - **建議**：先恢復 Supabase 專案為施工前置條件之一，且應優先於／同步於「補齊 error 檢查」一併處理，否則問題 2 所述缺失會持續讓此類中斷對使用者不可見。
+2. **【阻斷／需處理】Supabase 寫入錯誤處理全面缺失**（比對表第 10 項）。所有寫入皆 fire-and-forget，使用者資料（作答進度、企鵝日誌、里程碑）在網路異常或 RLS 拒絕時會靜默遺失且 UI 無感知。爭點模組若比照現有模式寫入，會延續此風險——建議 Phase 2.5 錯誤防護網優先處理此項，而非僅新增 `error_logs` 表卻不接上既有呼叫點。
+3. **【需處理】UI 版號與 git 進度不同步**（比對表第 3 項）。App.jsx:1271 硬編 `v14.5`，落後於最新 `v14.10` commit 及其後數筆未標版號的 Phase 2 commit，可能誤導除錯或使用者回報問題時的版本判斷。
+4. **【提示】CLAUDE.md 分支敘述與實際分支名不一致**（比對表第 5 項）。已提交版寫「在 dev 或 feature/\* 分支作業」，但實際開發分支為 `claude-dev`；本地並存 `main`／`master` 兩支容易混淆推送目標。
+5. **【提示】`lawquiz_bookmarks_v1`（書籤功能）localStorage key 未記載於任一份 CLAUDE.md**。此 key 確實存在並在 App.jsx 中讀寫（686-687, 828, 850 行），屬文件缺漏而非程式問題。
+6. **【提示】題目物件多出 `ref` 欄位**，未列於規劃書原假設的欄位清單中，非所有題目使用。新增 `issues`／`statutes` 前建議一併確認 `ref` 欄位的既有用途，避免三者定義風格不一致。
+7. **【提示】配色常數命名與規劃書所述中文色名（塵可可、霧藍、砂紙、塵玫、苔綠）無法直接對應**，程式碼內僅有英文語意鍵名。F 節已提供推測對應表，但需你確認或提供設計規格來源以精確核對，尤其規劃書提及「後兩色目前為暫定值」需要修正的具體對象。
+8. **【提示】App.jsx 內存在重複硬編色碼**（如多處 `#ECEAE5` 未透過 `T.bg` 引用），與配色常數集中管理的假設精神不完全一致，但不影響本次比對結論。
+9. **【提示】`npm run build` 成功**，但有 chunk size 警告（`dist/assets/index-*.js` 634 KB，超過 500 KB 建議值），單檔 JSX 架構下屬預期現象，暫不影響爭點模組施工可行性。
 
 ## 五、CLAUDE.md 待補值
 
