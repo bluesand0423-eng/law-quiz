@@ -166,6 +166,69 @@ async function loadPenguinData(userId){
 ```
 Supabase 暫停時，`journal2`／`stats2` 皆為 `undefined`，因此**每次登入都會顯示重置後的預設值**（累積題數 0、認識天數 1、日誌文案退回初始版本），即使資料庫裡實際仍保有累積紀錄——因為這條資料線完全無本地快取可退回，行為上與作答進度的「意外保留本地」不同，是**看起來像資料歸零、實際只是讀不到**的表現，屬於本次補充診斷「Supabase 暫停」發現的具體使用者可見症狀（詳見四-1）。
 
+#### 追加分析：恢復 Supabase 後、開啟 App 前的五項確認（僅分析，未修改程式碼）
+
+**1. `migrateFromLocalStorage` 是每次登入都執行，還是有一次性旗標？**
+
+**沒有任何一次性旗標**——不論在 `localStorage`、`sessionStorage`、Supabase 資料表欄位（如 `migrated_at`）皆搜尋不到相關鍵值（`grep -rn "migrat" src/` 僅命中函式定義 db.js:71 與唯一呼叫點 App.jsx:963，無旗標邏輯）。`migrateFromLocalStorage`（db.js:71-79）本身的唯一門檻是「`localStorage.getItem(LS)` 是否存在且可解析」（db.js:72-76），而 `LS`＝`lawquiz_prog_v1` 是作答進度的**持續性**主存放區（每次作答都會 `save()` 寫回，App.jsx:1169 `save(np)`），不會被清空或標記已遷移，所以**這個門檻恆為真，等同沒有門檻**。
+
+更關鍵的是呼叫時機：App.jsx 存在**兩個獨立的 useEffect**都在處理 Supabase Auth 狀態（953-970 行）：
+- **useEffect A**（953-958）：`supabase.auth.getSession().then(...)`，僅在元件掛載時執行一次，若已有 session 則呼叫 `fetchProgress`＋`loadPenguinData`——**不含** `migrateFromLocalStorage`。
+- **useEffect B**（959-968）：`supabase.auth.onAuthStateChange((_evt,session)=>{...})`，callback 對 `_evt`（事件類型）**完全未過濾**（959 行：`_evt` 有取值但從未使用），只要有 session 就無條件執行完整流程，**含** `migrateFromLocalStorage`（963 行）。
+
+Supabase JS v2 的 `onAuthStateChange` 依規格會在**訂閱當下立即觸發一次**（通常帶 `INITIAL_SESSION` 事件），此後 `SIGNED_IN`、`SIGNED_OUT`、`TOKEN_REFRESHED`（預設存取權杖每小時左右自動刷新一次）、`USER_UPDATED` 等事件都會再次觸發。因此實際效果是：**`migrateFromLocalStorage` 不只「每次登入」執行一次，而是在同一次瀏覽器工作階段中，只要 token 靜默刷新就會再跑一次**，且與 useEffect A 幾乎同時觸發，導致 `fetchProgress`／`loadPenguinData` 在恢復連線後首次開啟 App 時很可能被呼叫兩次（一次來自 A，一次來自 B 的初始觸發）。
+
+**2. `migrateFromLocalStorage` 的 upsert 是否 await 完成後才呼叫 `fetchProgress`？行號？**
+
+**是，確實循序等待，非平行競速**：
+- App.jsx:963-965：`migrateFromLocalStorage(u.id).then(()=>fetchProgress(u.id).then(remote=>setProg(prev=>({...prev,...remote}))))`——`.then()` 保證 `migrateFromLocalStorage` 的 Promise resolve 後才呼叫 `fetchProgress`。
+- db.js:77：`await batchUpsertProgress(userId, progObj);`——`migrateFromLocalStorage` 內部確實 `await` 了 db.js:41 的 upsert，其 Promise 要等 upsert 呼叫回應（無論成功或失敗）才 resolve。
+
+**但需留意**：supabase-js 的 upsert 呼叫**即使失敗也不會 reject**（回傳 `{data,error}` 物件，不 throw），所以「等待完成」只保證時序上的先後，**不保證上傳真的成功**——若 upsert 因 RLS 拒絕或連線問題而 `error`，`.then()` 仍會照常觸發，`fetchProgress` 一樣會接著執行，只是抓回的可能是尚未反映本地最新值的舊資料。
+
+**3. db.js:41 的 upsert 粒度與 onConflict 鍵？**
+
+**逐題一列，一次 API 呼叫批次寫入多列**（非「整包使用者資料存成一列 JSON」）。db.js:30-42：
+```js
+export async function batchUpsertProgress(userId, progObj) {
+  const rows = Object.entries(progObj).map(([question_id, { stars, attempts }]) => ({
+    user_id: userId, question_id, stars, attempts,
+    last_seen_at: new Date().toISOString(),
+  }));                                    // 每個 question_id 一個獨立物件
+  if (!rows.length) return;
+  await supabase.from("user_progress").upsert(rows, { onConflict: "user_id,question_id" });  // db.js:41
+}
+```
+`rows` 是陣列，元素數＝本地 `lawquiz_prog_v1` 中已作答的題目數；一次呼叫把整個陣列傳給 `.upsert()`，由 PostgREST 在單次請求內對每一列各自比對 `onConflict`。**onConflict 鍵為複合鍵字串 `"user_id,question_id"`**（逐題級別去重／覆蓋，而非整個使用者一列）。
+
+**4. 企鵝日誌與 user_stats：是否有寫入可能在 `loadPenguinData` 完成前、以預設值（歸零狀態）執行？`updateUserStats` 與 `checkIsReturning` 的呼叫時序檢查**
+
+**結論：`updateUserStats`、`checkIsReturning`、以及 `saveDailyJournal` 內的統計讀取，三者皆各自獨立向 Supabase 發送 `SELECT`，完全不依賴 `loadPenguinData` 是否已完成、也不讀取 `penguinData`／`journeyData` 這類 React state（那些 state 只用於畫面顯示，不參與寫入計算）。**因此「因為 `loadPenguinData` 還沒跑完，導致 `updateUserStats` 誤讀了 UI 上顯示的歸零值」這種路徑**不存在**。
+
+但存在另一條更嚴重、獨立於 `loadPenguinData` 的風險路徑，直接回答第 4 題「是否有寫入可能以預設值執行」：
+
+- `updateUserStats(userId, questionsToday)`（penguinJournal.js:87-146）由 `handleAns()`（App.jsx:1159-1174，使用者答題點擊的 callback）在第 1170 行直接呼叫：`updateUserStats(userRef.current.id,1)`，**沒有任何 loading gate**——`handleAns` 只要 `userRef.current` 存在就會呼叫，不檢查 `loadPenguinData`／`penguinData` 是否已就緒，使用者可以在 App 剛掛載、甚至 Supabase 剛從暫停恢復、任何背景讀取都還沒完成時就直接作答。
+- `updateUserStats` 第一步是 `const existing = await _fetchStats(userId);`（91 行），`_fetchStats`（penguinJournal.js:29-36）自己執行 `supabase.from("user_stats").select("*")...maybeSingle()`，**只解構 `data`、未解構 `error`**（30-34 行：`const {data} = await supabase...; return data;`）——若此次 SELECT 因任何原因失敗（連線錯誤、專案剛恢復尚在冷啟動、逾時），`data` 會是 `null`／`undefined`，函式一律回傳該值，呼叫端無從分辨「使用者本來就沒有紀錄（真的是新使用者）」與「查詢失敗（其實有紀錄，只是讀不到）」。
+- 後續計算（95-109 行）對這兩種情況一視同仁：`prevStudyDays = existing?.total_study_days ?? 0`、`prevQuestions = existing?.total_questions ?? 0`、`firstLoginAt = existing?.first_login_at ?? now.toISOString()`——查詢失敗會被當成「這是全新使用者」處理。
+- 緊接著 111-121 行**直接以這組（可能是誤判的）新使用者數值執行 `upsert`**，`onConflict:"user_id"`：
+  ```js
+  const { error } = await supabase.from("user_stats").upsert(
+    { user_id: userId, total_questions: totalQuestions, total_study_days: totalStudyDays,
+      days_together: daysTogether, first_login_at: firstLoginAt, last_login_at: now.toISOString() },
+    { onConflict: "user_id" }
+  );
+  ```
+  由於 `onConflict` 鍵是單一 `user_id`（每位使用者僅一列），此 upsert 對已存在的列是**整列覆蓋**，並非只累加差異——若前一步的讀取因暫停剛恢復、連線尚未穩定而誤判為「新使用者」，這次寫入會**直接用歸零附近的數值（`total_study_days`≈1、`total_questions`＝本次答題數、`first_login_at`＝現在時間）覆蓋掉資料庫裡原本真實的累積紀錄**，且全程無重試、無二次確認，`error` 雖有解構（123 行 `if(!error && ...)`）但僅用於決定是否接著寫 `penguin_journal`，並未用於阻止或回滾這次已經送出的覆蓋寫入。
+
+- `checkIsReturning(userId)`（penguinJournal.js:149-161）同樣獨立查詢 `user_stats.select("last_login_at")`（150-154 行），若查詢失敗，`data` 為 `null`，則 `if (!data?.last_login_at) return false;`（156 行）——**失敗時安全地回傳 `false`（不觸發「歡迎回來」），屬於保守失效（fail-safe），不會造成資料覆寫**，風險遠低於 `updateUserStats`。
+- `saveDailyJournal` 內的 `_fetchStats` 讀取（penguinJournal.js:43-44）若失敗，只影響當日 `penguin_note` 文案選字（用於 `getPenguinNote`），**不寫入任何統計數字**，屬於顯示層級風險，非資料覆寫風險。
+
+**5. 依以上結果，判斷恢復後首次登入的風險**
+
+- **本機新紀錄（作答進度）是否可能被舊雲端資料覆蓋？** 風險**低但非零**。第 2 題已確認上傳（db.js:41 upsert）必定先於下載（`fetchProgress`）完成才觸發，正常情況下下載回來的 remote 資料已內含剛上傳的本地值，`setProg` 合併（App.jsx:964）不會用「舊」雲端資料覆蓋「新」本地資料。唯一例外：若上傳本身因故失敗（error 但不 reject，見第 2 題），且**恢復後 Supabase 短暫可連線但該次寫入仍失敗**、隨後的下載卻成功抓到舊資料，此時 `remote` 會是舊值並覆蓋 `prog` state 中對應 question_id 的新本地值——但**不會覆蓋雲端沒有記錄、只存在本地的 question_id**（因為 `{...prev,...remote}` 對 remote 沒有的 key 保留 prev）。整體而言，這是「部分題目的星級／作答次數退回舊值」的中低風險，而非整批本地資料被清空。
+- **統計（`user_stats`）是否可能被歸零值覆寫？** **是，這是本次分析找到的最高風險項**，機制已在第 4 題詳述：`updateUserStats` 對讀取失敗與「真的是新使用者」一視同仁，且其 upsert 是整列覆蓋（`onConflict:"user_id"`），一旦在 Supabase 剛恢復、冷啟動延遲或短暫連線不穩的視窗期內使用者剛好作答（`handleAns` 無 loading gate，隨時可能觸發），`total_study_days`、`total_questions`、`first_login_at` 這些**不會自動重算、只靠這次 upsert 寫入**的欄位就可能被永久覆寫成接近歸零的值，且沒有任何 UI 提示或錯誤記錄（`error` 未被用於阻擋或告警）。
+- **建議**（僅供你參考，本次未修改程式碼）：恢復 Supabase 後，建議**先手動確認 `user_stats` 能穩定查詢成功**（例如在 Supabase Dashboard 對該表跑一次 SELECT）再開啟 App 作答；若要根本解決，`updateUserStats` 需要區分「查無資料列」與「查詢本身出錯」兩種情況（例如檢查 `_fetchStats` 的 `error`，出錯時中止 upsert 而非以預設值繼續），這屬於 Phase 2.5 錯誤防護網的範圍，與四-2 所述「全面缺失 error 檢查」為同一根因。
+
 **Supabase 專案 ref**：`qfkethioqskdclkzczmp`（自 `https://qfkethioqskdclkzczmp.supabase.co` 擷取，僅記錄網址子網域，未讀取 `.env` 內容或任何金鑰）。
 
 ### E. 錯誤處理現況
