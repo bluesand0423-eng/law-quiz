@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // supabaseClient 使用 import.meta.env，在 vitest 環境需要 mock 掉
 // getPenguinNote 是純函式，不使用 supabase，但 module 頂層 import 會觸發
@@ -6,7 +6,8 @@ vi.mock("./supabaseClient", () => ({
   supabase: { from: vi.fn(), auth: {} },
 }));
 
-import { getPenguinNote } from "./penguinJournal";
+import { supabase } from "./supabaseClient";
+import { getPenguinNote, updateUserStats } from "./penguinJournal";
 
 describe("getPenguinNote 優先序", () => {
 
@@ -102,6 +103,84 @@ describe("getPenguinNote 優先序", () => {
 
   it("無參數（undefined）→ 預設訊息", () => {
     expect(getPenguinNote()).toBe("今天也一起努力了。");
+  });
+
+});
+
+describe("updateUserStats：查詢失敗時不得覆蓋既有統計（data-loss hotfix 迴歸測試）", () => {
+
+  beforeEach(() => {
+    supabase.from.mockReset();
+  });
+
+  it("既有統計存在，但 _fetchStats 查詢失敗 → 中止寫入，既有資料維持不變", async () => {
+    const upsertUserStats = vi.fn().mockResolvedValue({ error: null });
+
+    // user_stats 讀取模擬查詢失敗（非「查無資料」）：error 有值
+    supabase.from.mockImplementation((table) => {
+      if (table === "user_stats") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () =>
+                Promise.resolve({ data: null, error: { message: "network error" } }),
+            }),
+          }),
+          upsert: upsertUserStats,
+        };
+      }
+      throw new Error(`測試未預期呼叫 supabase.from("${table}")`);
+    });
+
+    const result = await updateUserStats("user-existing", 1);
+
+    // 核心斷言：查詢失敗絕不可觸發 upsert（onConflict:"user_id" 為整列覆蓋，
+    // 若誤寫入會用歸零附近的值蓋掉既有累積紀錄）
+    expect(upsertUserStats).not.toHaveBeenCalled();
+    expect(result.error).toBeTruthy();
+  });
+
+  it("查無資料（真正的新使用者，data:null 且 error:null）→ 允許建立新列", async () => {
+    const upsertUserStats = vi.fn().mockResolvedValue({ error: null });
+    const upsertPenguinJournal = vi.fn().mockResolvedValue({ error: null });
+
+    supabase.from.mockImplementation((table) => {
+      if (table === "user_stats") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: null, error: null }),
+            }),
+          }),
+          upsert: upsertUserStats,
+        };
+      }
+      if (table === "penguin_journal") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                maybeSingle: () => Promise.resolve({ data: null, error: null }),
+              }),
+            }),
+          }),
+          upsert: upsertPenguinJournal,
+        };
+      }
+      throw new Error(`測試未預期呼叫 supabase.from("${table}")`);
+    });
+
+    const result = await updateUserStats("user-brand-new", 1);
+
+    // 與上一個測試對照：真正查無資料時，仍應正常建立第一筆列，
+    // 證明修正沒有把所有情況都當成失敗一律擋下
+    expect(upsertUserStats).toHaveBeenCalledTimes(1);
+    expect(upsertUserStats.mock.calls[0][0]).toMatchObject({
+      user_id: "user-brand-new",
+      total_questions: 1,
+      total_study_days: 1,
+    });
+    expect(result.error).toBeFalsy();
   });
 
 });

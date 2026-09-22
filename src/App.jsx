@@ -820,6 +820,14 @@ export default function App(){
   const [journalEntries,setJournalEntries]=useState([]);
   const [journalLoading,setJournalLoading]=useState(false);
   const [journeyData,setJourneyData]=useState(null);
+  // ── 雲端同步失敗提示（中性文案，僅顯示，不做通知中心／重試佇列）──
+  const [syncNotice,setSyncNotice]=useState("");
+  const syncNoticeTimerRef=useRef(null);
+  function notifySyncFailure(msg){
+    setSyncNotice(msg||"這次沒能存到雲端，資料先留在這台裝置。");
+    clearTimeout(syncNoticeTimerRef.current);
+    syncNoticeTimerRef.current=setTimeout(()=>setSyncNotice(""),4000);
+  }
 
   const ALL_Q=QB;
 
@@ -850,7 +858,14 @@ export default function App(){
         localStorage.setItem(BOOKMARK_LS,JSON.stringify(d.bookmarks));
         setProg(load());
         setBookmarks(loadBookmarks());
-        if(userRef.current)batchUpsertProgress(userRef.current.id,d.prog);
+        if(userRef.current){
+          batchUpsertProgress(userRef.current.id,d.prog).then(({error})=>{
+            if(error){
+              console.error("[handleFileImport] batchUpsertProgress 失敗：",error);
+              notifySyncFailure();
+            }
+          });
+        }
         const n=Object.keys(d.prog).length;
         setImportMsg(`ok:${n}`);setTimeout(()=>setImportMsg(""),2000);
       }catch{
@@ -956,10 +971,12 @@ export default function App(){
       setUser(u);userRef.current=u;
       if(u){fetchProgress(u.id).then(remote=>setProg(prev=>({...prev,...remote})));loadPenguinData(u.id);}
     });
-    const {data:{subscription}}=supabase.auth.onAuthStateChange((_evt,session)=>{
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((evt,session)=>{
       const u=session?.user??null;
       setUser(u);userRef.current=u;
-      if(u){
+      // 僅在登入／恢復既有 session 時執行完整遷移＋抓取；
+      // 忽略 TOKEN_REFRESHED（約每小時一次）等事件，避免重跑遷移流程。
+      if(u&&(evt==="SIGNED_IN"||evt==="INITIAL_SESSION")){
         migrateFromLocalStorage(u.id).then(()=>
           fetchProgress(u.id).then(remote=>setProg(prev=>({...prev,...remote})))
         );
@@ -975,7 +992,11 @@ export default function App(){
       supabase.from("penguin_journal").select("penguin_note,user_note").eq("user_id",userId).eq("date",today).maybeSingle(),
       supabase.from("user_stats").select("total_study_days,total_questions").eq("user_id",userId).maybeSingle(),
     ]);
-    await saveDailyJournal(userId);
+    const{error:journalError}=await saveDailyJournal(userId);
+    if(journalError){
+      console.error("[loadPenguinData] saveDailyJournal 失敗：",journalError);
+      notifySyncFailure();
+    }
     const[{data:journal2},{data:stats2}]=await Promise.all([
       supabase.from("penguin_journal").select("penguin_note,user_note").eq("user_id",userId).eq("date",today).maybeSingle(),
       supabase.from("user_stats").select("total_study_days,total_questions,days_together").eq("user_id",userId).maybeSingle(),
@@ -994,12 +1015,19 @@ export default function App(){
     if(!userRef.current||!journalInput.trim())return;
     setJournalSaving(true);
     const today=new Date().toISOString().slice(0,10);
-    await supabase.from("penguin_journal").upsert(
-      {user_id:userRef.current.id,date:today,user_note:journalInput.trim(),penguin_note:penguinData?.penguinNote??"今天也一起努力了。"},
+    const noteText=journalInput.trim();
+    const{error}=await supabase.from("penguin_journal").upsert(
+      {user_id:userRef.current.id,date:today,user_note:noteText,penguin_note:penguinData?.penguinNote??"今天也一起努力了。"},
       {onConflict:"user_id,date"}
     );
-    setPenguinData(prev=>({...prev,userNote:journalInput.trim()}));
-    setJournalInput("");setJournalSaving(false);
+    setJournalSaving(false);
+    if(error){
+      console.error("[saveUserNote] penguin_journal upsert 失敗：",error);
+      notifySyncFailure();
+      return; // 保留 journalInput，讓使用者可重新送出，不清空、不假裝已存
+    }
+    setPenguinData(prev=>({...prev,userNote:noteText}));
+    setJournalInput("");
   }
 
   async function loadJournalEntries(userId){
@@ -1167,7 +1195,16 @@ export default function App(){
     else{if(stars.some(s=>s==="g")){stars=["e","e","e","e","e"];}else{const idx=stars.findIndex(s=>s!=="r");if(idx!==-1)stars[idx]="r";}}
     const np={...prog,[id]:{...prev,stars,attempts:prev.attempts+1}};
     setProg(np);save(np);
-    if(userRef.current){upsertProgress(userRef.current.id,id,stars,np[id].attempts);updateUserStats(userRef.current.id,1);}
+    if(userRef.current){
+      const uid=userRef.current.id;
+      (async()=>{
+        const[progResult,statsResult]=await Promise.all([
+          upsertProgress(uid,id,stars,np[id].attempts),
+          updateUserStats(uid,1),
+        ]);
+        if(progResult?.error||statsResult?.error)notifySyncFailure();
+      })();
+    }
     const cfg=LAW_CONFIG[cq.subject];
     if(cfg&&!drawerLaw)setDrawerLaw(cfg);
     setDrawerOpen(true);
@@ -1283,6 +1320,12 @@ export default function App(){
           </div>
         </div>
       </header>
+
+      {syncNotice&&(
+        <div style={{position:"fixed",bottom:"calc(16px + env(safe-area-inset-bottom,0px))",left:"50%",transform:"translateX(-50%)",background:T.surfaceDeep,color:T.ink,border:`1px solid ${T.bdr}`,borderRadius:12,padding:"0.6rem 1rem",fontSize:"0.78rem",boxShadow:"0 4px 20px rgba(56,59,78,0.25)",zIndex:50,maxWidth:"90%",textAlign:"center"}}>
+          {syncNotice}
+        </div>
+      )}
 
       <main style={{maxWidth:660,margin:"0 auto",padding:"0.875rem 0.875rem 4rem"}}>
 
@@ -1527,7 +1570,7 @@ export default function App(){
                 );
               })}
               <div style={{display:"flex",gap:"0.5rem",marginTop:"0.75rem"}}>
-                <button onClick={()=>{if(confirm("確定清除所有作答進度？")){localStorage.removeItem(LS);setProg({});if(userRef.current)clearProgress(userRef.current.id);}}} style={{flex:1,padding:"0.5rem",background:"transparent",color:T.red,border:`1.5px solid #fca5a5`,borderRadius:10,fontSize:"0.76rem",cursor:"pointer",fontFamily:"inherit"}}>— 清除作答進度</button>
+                <button onClick={()=>{if(confirm("確定清除所有作答進度？")){localStorage.removeItem(LS);setProg({});if(userRef.current){clearProgress(userRef.current.id).then(({error})=>{if(error){console.error("[清除作答進度] user_progress delete 失敗：",error);notifySyncFailure("本機已清除，雲端這次沒能同步清除。");}});}}}} style={{flex:1,padding:"0.5rem",background:"transparent",color:T.red,border:`1.5px solid #fca5a5`,borderRadius:10,fontSize:"0.76rem",cursor:"pointer",fontFamily:"inherit"}}>— 清除作答進度</button>
               </div>
             </div>
           </div>
