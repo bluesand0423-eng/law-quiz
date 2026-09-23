@@ -2,14 +2,16 @@
 
 ## 一、結論摘要
 
-1. **【阻斷】Supabase 專案目前處於暫停狀態**（你於補充診斷中確認）。爭點模組若涉及新表或既有表寫入，在專案恢復前皆無法實測，且比對表第 6、7、8 項與 G 節之 SQL 查詢也無法在此狀態下取得。**不應在此狀態下進入前置施工**，須先恢復 Supabase 專案。
-2. 撇開 Supabase 暫停不談，其餘核心假設（題庫結構、題數、部署平台、分支策略、科目代碼）均與規劃書相符，程式碼面準備度尚可。
-3. 次嚴重的不符項：**Supabase 寫入錯誤處理全面缺失**——8 個寫入呼叫中，僅 1 個（`updateUserStats` 對 `user_stats` 的 upsert）在函式內部檢查了 `error`，其餘 7 個皆未檢查，且呼叫端（`App.jsx`）對所有寫入一律 fire-and-forget，不 await 也不檢查回傳值。此問題與「Supabase 暫停」直接相關：專案暫停期間，所有寫入呼叫會逐一失敗，但因無錯誤處理，使用者完全不會被告知，UI 表現與正常運作時幾乎無異（見四-1 詳述）。
+1. **【已解除】Supabase 專案已恢復連線，G 節六段唯讀查詢（含第 7 段主鍵／唯一約束查詢）均已執行完畢**。資料層（表、RLS、policy、GRANT、約束）全部正常，比對表第 6、7、8 項與「發現的問題」第 11 項均已由查詢結果證實通過，詳見 G 節與比對表。
+2. 核心假設（題庫結構、題數、部署平台、分支策略、科目代碼）均與規劃書相符，程式碼面準備度尚可。
+3. 次嚴重的不符項：**Supabase 寫入錯誤處理全面缺失**——8 個寫入呼叫中，僅 1 個（`updateUserStats` 對 `user_stats` 的 upsert）在函式內部檢查了 `error`，其餘 7 個皆未檢查，且呼叫端（`App.jsx`）對所有寫入一律 fire-and-forget，不 await 也不檢查回傳值。此問題與 Supabase 暫停期間（現已恢復）的表現直接相關：專案暫停期間，所有寫入呼叫會逐一失敗，但因無錯誤處理，使用者完全不會被告知，UI 表現與正常運作時幾乎無異（見四-1 詳述）；2026-09-22 的 hotfix（`6d4a028`）已處理「查詢失敗時以歸零值覆蓋統計」這一具體症狀，但全面的 error 檢查與可見化仍待 Phase 2.5。
 4. `error_logs` 表確認尚不存在（規劃書假設相符）；`issues`／`statutes` 欄位確認尚未使用（規劃書假設相符），可安全新增不撞名。
 5. 版號顯示與實際 commit 進度不同步：UI 頁首硬編 `v14.5`，但 git log 最新版號 commit 為 `v14.10`，其後仍有數個未標版號的 Phase 2 commit——顯示版號已過時，非規劃書所述現況本身的問題，但屬盤點發現。
-6. Supabase 端（RLS、GRANT、schema、trigger）尚待你手動貼回 SQL Editor 查詢結果，且須待專案恢復後才能執行；本報告 G 節與比對表第 6、7 項暫標【待補・受阻】。
+6. Supabase 端（RLS、GRANT、schema、trigger、主鍵／唯一約束）已由你貼回 SQL Editor 查詢結果並完成核對；本報告 G 節與比對表第 6、7 項已由【待補・受阻】更新為 ✓ 相符。
 
 ## 二、盤點結果
+
+**總結**：資料層（表、RLS、policy、GRANT、約束）全部正常，寫入失敗的原因完全在應用層，已由 hotfix `6d4a028` 處理。
 
 ### A. Git 與部署
 
@@ -303,20 +305,17 @@ export async function batchUpsertProgress(userId, progObj) {
 
 **結論（資料層 vs. 應用層）**：資料層沒有問題，病灶全部在應用層。先前存在「寫入失敗是否因 GRANT 又缺」的可能性，本次查詢排除——權限、RLS、policy 全部正常。六月的教訓只學到一半：GRANT 補對了，但「應用程式把失敗當成功」這一半當時沒修，直到 2026-09-22 的 hotfix（`6d4a028`）才處理。
 
-**尚待補查（查詢 7｜主鍵與唯一約束）**：本次六段查詢未涵蓋主鍵與唯一約束。三表所有 upsert 皆依賴 `onConflict`（`user_progress`: `user_id,question_id`；`user_stats`: `user_id`；`penguin_journal`: `user_id,date`），`onConflict` 指定欄位若無對應唯一約束，upsert 會直接報錯，此點目前**未驗證**，維持【待補・受阻】。待苳補跑下列查詢並貼回結果後，需逐一核對上述三組 `onConflict` 鍵是否都有對應的唯一約束：
+**查詢 7｜主鍵與唯一約束**（5 rows，2026-09-24 補充）：
 
-```sql
-select tc.table_name, tc.constraint_type, tc.constraint_name,
-       string_agg(kcu.column_name, ', ' order by kcu.ordinal_position) as columns
-from information_schema.table_constraints tc
-join information_schema.key_column_usage kcu
-  on kcu.constraint_name = tc.constraint_name
- and kcu.table_schema = tc.table_schema
-where tc.table_schema = 'public'
-  and tc.constraint_type in ('PRIMARY KEY', 'UNIQUE')
-group by tc.table_name, tc.constraint_type, tc.constraint_name
-order by tc.table_name, tc.constraint_type;
-```
+| table_name | constraint_type | constraint_name | columns |
+|---|---|---|---|
+| penguin_journal | PRIMARY KEY | penguin_journal_pkey | id |
+| penguin_journal | UNIQUE | penguin_journal_user_id_date_key | user_id, date |
+| user_progress | PRIMARY KEY | user_progress_pkey | id |
+| user_progress | UNIQUE | user_progress_user_id_question_id_key | user_id, question_id |
+| user_stats | PRIMARY KEY | user_stats_pkey | user_id |
+
+**核對結論**：三表所有 upsert 依賴的 `onConflict` 鍵——`user_progress`: `user_id,question_id`、`user_stats`: `user_id`、`penguin_journal`: `user_id,date`——皆有對應的唯一約束（依序對應 `user_progress_user_id_question_id_key`、`user_stats_pkey`、`penguin_journal_user_id_date_key`）。三組 onConflict 鍵皆有效，**upsert 不會因缺約束而報錯**。
 
 ## 三、假設比對表
 
@@ -336,11 +335,11 @@ order by tc.table_name, tc.constraint_type;
 
 ## 四、發現的問題
 
-1. **【阻斷】Supabase 專案目前處於暫停狀態**（你於補充診斷中確認）。具體使用者可見症狀：
+1. **【已解除，紀錄備查】Supabase 專案曾一度處於暫停狀態，現已恢復連線**（G 節六段查詢，含第 7 段約束查詢，均已於 2026-09-22～09-24 執行完畢並確認資料層正常）。暫停期間曾觀察到的具體使用者可見症狀，紀錄如下以供日後參考：
    - 作答進度（`user_progress`）：因 `fetchProgress` 對錯誤採防禦性回傳 `{}`（db.js:11），登入時的合併步驟（App.jsx:964）等於無效，UI 上**意外地**保留 localStorage 資料，暫時看不出異常。
    - 企鵝日誌／統計（`penguin_journal`、`user_stats`）：`loadPenguinData`（App.jsx:972-992）無本地備援，每次登入會顯示重置後的預設值（累積題數 0、認識天數 1），**看起來像資料歸零，實際上只是讀不到**——這與企鵝文案「不得表現失望、不得因未登入抱怨」的既有原則無直接牴觸（因為文案邏輯本身仍會執行，只是輸入值全為預設），但呈現的數字本身具有誤導性。
-   - 在專案恢復前，比對表第 6、7、8 項無法查證，Phase 2.5 錯誤防護網與爭點模組的寫入路徑也無法實測。
-   - **建議**：先恢復 Supabase 專案為施工前置條件之一，且應優先於／同步於「補齊 error 檢查」一併處理，否則問題 2 所述缺失會持續讓此類中斷對使用者不可見。
+   - 比對表第 6、7、8 項與「發現的問題」第 11 項現已由 G 節查詢結果證實通過；Phase 2.5 錯誤防護網與爭點模組的寫入路徑，現可在已恢復的專案上實測。
+   - **後續建議**：資料層問題已排除，剩餘風險完全在應用層（見問題 2），建議 Phase 2.5 優先補齊全面的 error 檢查與可見化，避免專案再次暫停或連線異常時，此類中斷再度對使用者不可見。
 2. **【阻斷／需處理】Supabase 寫入錯誤處理全面缺失**（比對表第 10 項）。所有寫入皆 fire-and-forget，使用者資料（作答進度、企鵝日誌、里程碑）在網路異常或 RLS 拒絕時會靜默遺失且 UI 無感知。爭點模組若比照現有模式寫入，會延續此風險——建議 Phase 2.5 錯誤防護網優先處理此項，而非僅新增 `error_logs` 表卻不接上既有呼叫點。
 3. **【需處理】UI 版號與 git 進度不同步**（比對表第 3 項）。App.jsx:1271 硬編 `v14.5`，落後於最新 `v14.10` commit 及其後數筆未標版號的 Phase 2 commit，可能誤導除錯或使用者回報問題時的版本判斷。
 4. **【提示】CLAUDE.md 分支敘述與實際分支名不一致**（比對表第 5 項）。已提交版寫「在 dev 或 feature/\* 分支作業」，但實際開發分支為 `claude-dev`；本地並存 `main`／`master` 兩支容易混淆推送目標。
@@ -350,7 +349,7 @@ order by tc.table_name, tc.constraint_type;
 8. **【提示】App.jsx 內存在重複硬編色碼**（如多處 `#ECEAE5` 未透過 `T.bg` 引用），與配色常數集中管理的假設精神不完全一致，但不影響本次比對結論。
 9. **【提示】`npm run build` 成功**，但有 chunk size 警告（`dist/assets/index-*.js` 634 KB，超過 500 KB 建議值），單檔 JSX 架構下屬預期現象，暫不影響爭點模組施工可行性。
 10. **【需處理】`anon` 角色具備三表完整權限（含 DELETE、TRUNCATE），policy 的 `roles` 為 `{public}`（涵蓋 anon）而非 `{authenticated}`**（G 節查詢 3、4）。目前不會出事，因 RLS 的 `auth.uid() = user_id` 對匿名使用者不成立；但違反最小權限原則——若某張表的 RLS 被關閉或 policy 寫錯，匿名使用者即可清空整張表。處置：收緊需執行 `REVOKE`，屬寫入操作，排入 Phase 2.5，本次不動。
-11. **【需處理】六段唯讀查詢未涵蓋主鍵與唯一約束**，而三表所有 upsert 均依賴 `onConflict`（`user_progress`: `user_id,question_id`；`user_stats`: `user_id`；`penguin_journal`: `user_id,date`，見 db.js:27,44、penguinJournal.js:75,134,159,172、App.jsx:1021），`onConflict` 指定欄位若無對應唯一約束會直接報錯，目前未驗證。已於 G 節附上查詢 7 的 SQL，待苳補跑並貼回結果後，需逐一核對上述三組 `onConflict` 鍵是否都有對應的唯一約束。
+11. **【已確認・無問題】三表所有 upsert 依賴的 `onConflict` 鍵均有對應唯一約束**（`user_progress`: `user_id,question_id`；`user_stats`: `user_id`；`penguin_journal`: `user_id,date`，見 db.js:27,44、penguinJournal.js:75,134,159,172、App.jsx:1021）。已由 G 節查詢 7 證實：`user_progress_user_id_question_id_key`、`user_stats_pkey`、`penguin_journal_user_id_date_key` 三組唯一約束分別對應，upsert 不會因缺約束而報錯。
 
 ## 五、CLAUDE.md 待補值
 
