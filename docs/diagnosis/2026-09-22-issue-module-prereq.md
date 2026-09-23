@@ -276,12 +276,47 @@ export async function batchUpsertProgress(userId, progObj) {
 
 ### G. Supabase 查詢結果
 
-**【阻斷・待苳提供】Supabase 專案目前處於暫停狀態**（你於補充診斷中確認）。本次曾嘗試以唯讀 GET request 探測 `https://qfkethioqskdclkzczmp.supabase.co/rest/v1/`（純連線測試，未帶金鑰、未做任何查詢或寫入），但本機沙箱環境對外連線受限，回傳 `HTTP_STATUS:000`（無法建立連線），無法從此環境獨立佐證暫停狀態，故此項判定完全採信你的回報。
+**【已解除】** Supabase 專案已恢復連線，苳已於 SQL Editor 執行第 3 節六段唯讀查詢（2026-09-22 補充）。
 
-在專案恢復連線前：
-- 第 3 節六段 SELECT 查詢**無法執行**，比對表第 6、7 項及 `error_logs`／schema 現況（第 8 項的資料庫面向）維持【？無法確認】。
-- App 內所有 Supabase 讀寫呼叫會逐一失敗（見四-1 對應之使用者可見症狀）。
-- 建議：**先恢復 Supabase 專案，再執行第 3 節查詢並貼回**，本報告會在取得結果後補入本節與比對表；爭點模組相關的 Phase 2.5 資料防護網施工也必須等專案恢復後才能實測寫入路徑。
+**查詢 1｜現有資料表**（3 rows）：`penguin_journal`、`user_progress`、`user_stats`。`error_logs` 確認不存在。
+
+**查詢 2｜RLS 是否啟用**（3 rows）：`penguin_journal`、`user_progress`、`user_stats` 皆為 `true`。
+
+**查詢 3｜RLS policy 明細**（3 rows）：
+
+| tablename | policyname | cmd | roles | qual | with_check |
+|---|---|---|---|---|---|
+| penguin_journal | own rows | ALL | {public} | (auth.uid() = user_id) | (auth.uid() = user_id) |
+| user_progress | own rows | ALL | {public} | (auth.uid() = user_id) | (auth.uid() = user_id) |
+| user_stats | own row | ALL | {public} | (auth.uid() = user_id) | (auth.uid() = user_id) |
+
+**查詢 4｜table-level GRANT**（6 rows）：三張表對 `anon` 與 `authenticated` 皆為 `DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE`。
+
+**查詢 5｜各表欄位**（22 rows）：
+- `penguin_journal`：`id uuid NOT NULL`、`user_id uuid NOT NULL`、`date date NOT NULL`、`questions_done int`、`minutes_spent int`、`fish_earned int`、`penguin_note text`、`user_note text`、`milestone_type text`
+- `user_progress`：`id uuid NOT NULL`、`user_id uuid NOT NULL`、`question_id text NOT NULL`、`stars ARRAY`、`attempts int`、`last_seen_at timestamptz`
+- `user_stats`：`user_id uuid NOT NULL`、`total_questions int`、`streak_days int`、`total_study_days int`、`days_together int`、`first_login_at timestamptz`、`last_login_at timestamptz`
+
+`user_stats` 無 `updated_at` 欄位。
+
+**查詢 6｜既有 trigger**：0 rows（Success. No rows returned）——三張表皆無任何 trigger。
+
+**結論（資料層 vs. 應用層）**：資料層沒有問題，病灶全部在應用層。先前存在「寫入失敗是否因 GRANT 又缺」的可能性，本次查詢排除——權限、RLS、policy 全部正常。六月的教訓只學到一半：GRANT 補對了，但「應用程式把失敗當成功」這一半當時沒修，直到 2026-09-22 的 hotfix（`6d4a028`）才處理。
+
+**尚待補查（查詢 7｜主鍵與唯一約束）**：本次六段查詢未涵蓋主鍵與唯一約束。三表所有 upsert 皆依賴 `onConflict`（`user_progress`: `user_id,question_id`；`user_stats`: `user_id`；`penguin_journal`: `user_id,date`），`onConflict` 指定欄位若無對應唯一約束，upsert 會直接報錯，此點目前**未驗證**，維持【待補・受阻】。待苳補跑下列查詢並貼回結果後，需逐一核對上述三組 `onConflict` 鍵是否都有對應的唯一約束：
+
+```sql
+select tc.table_name, tc.constraint_type, tc.constraint_name,
+       string_agg(kcu.column_name, ', ' order by kcu.ordinal_position) as columns
+from information_schema.table_constraints tc
+join information_schema.key_column_usage kcu
+  on kcu.constraint_name = tc.constraint_name
+ and kcu.table_schema = tc.table_schema
+where tc.table_schema = 'public'
+  and tc.constraint_type in ('PRIMARY KEY', 'UNIQUE')
+group by tc.table_name, tc.constraint_type, tc.constraint_name
+order by tc.table_name, tc.constraint_type;
+```
 
 ## 三、假設比對表
 
@@ -292,9 +327,9 @@ export async function batchUpsertProgress(userId, progObj) {
 | 3 | 版號 v14.10 | ✗ | git log 最新版號 commit 為 `f1a709a v14.10`，但 UI 頁首（App.jsx:1271）硬編顯示 `v14.5`，且其後仍有多筆未標版號的 Phase 2 commit（`df020e6`、`be18009`、`2f6c33b`、`17bfb30`），實際功能進度已超前 UI 顯示版號 |
 | 4 | 部署平台為 Vercel；Netlify 已停用 | ✓ | 已提交版 CLAUDE.md 明確記載；`netlify.toml`/`vercel.json` 均不存在；git log 有 `v14: 直連官網模式，移除 Netlify Function 與設定檔` 佐證 |
 | 5 | 本地 master、遠端 main、開發分支 claude-dev | ✗（部分） | 目前分支為 `claude-dev`（相符），但本地同時存在 `main` 與 `master` 兩支（非僅 master），遠端也同時有 `origin/main`、`origin/master`、`origin/claude-dev` 三支。已提交版 CLAUDE.md 記載「在 dev 或 feature/\* 分支作業，不直接 push 至 main」，用詞是 `dev` 而非 `claude-dev`，與實際分支名不完全一致 |
-| 6 | Supabase 有 user_progress、user_stats、penguin_journal 三表，RLS 條件 auth.uid() = user_id | ？ | **受阻**：Supabase 專案暫停中，無法執行 SQL Editor 查詢（見 G 節），恢復連線後補查 |
-| 7 | 上述三表已補 table-level GRANT | ？ | **受阻**：同上，需專案恢復後補查 |
-| 8 | error_logs 表尚不存在 | ✓（程式碼面）／？（資料庫面） | 程式碼無任何 `error_logs` 引用；資料庫是否已建表**受 Supabase 暫停阻擋**，待 G 節查詢確認 |
+| 6 | Supabase 有 user_progress、user_stats、penguin_journal 三表，RLS 條件 auth.uid() = user_id | ✓ | 已由 G 節查詢 2、3 證實：三表皆存在，RLS 皆啟用（`true`），policy 條件皆為 `auth.uid() = user_id` |
+| 7 | 上述三表已補 table-level GRANT | ✓ | 已由 G 節查詢 4 證實：三表對 `anon` 與 `authenticated` 皆已授予完整權限（六月修復確實生效） |
+| 8 | error_logs 表尚不存在 | ✓ | 程式碼面與資料庫面皆確認：G 節查詢 1 證實資料庫中亦無此表 |
 | 9 | 題目物件尚無 issues、statutes 欄位 | ✓ | 全檔搜尋無匹配，欄位清單為 `id, examCategory, year, examGroup, subject, text, options, answer, explanation, ref`（含規劃書未提及的 `ref` 欄位） |
 | 10 | 所有 Supabase 寫入皆已 await 並檢查 error | ✗ | 8 個寫入呼叫中，7 個未在任何層級檢查 error；2 個函式內部捕捉 error，但呼叫端皆未讀取回傳的 error，詳見 E 節表格 |
 | 11 | 科目代碼為 civ/cvp/cri/csp/eth/con/adm/ipub/ipriv/com/ins/neg/sec/enf/eng | ✓ | 完全相符，15 碼皆與題目 id 前綴一致 |
@@ -314,6 +349,8 @@ export async function batchUpsertProgress(userId, progObj) {
 7. **【提示】配色常數命名與規劃書所述中文色名（塵可可、霧藍、砂紙、塵玫、苔綠）無法直接對應**，程式碼內僅有英文語意鍵名。F 節已提供推測對應表，但需你確認或提供設計規格來源以精確核對，尤其規劃書提及「後兩色目前為暫定值」需要修正的具體對象。
 8. **【提示】App.jsx 內存在重複硬編色碼**（如多處 `#ECEAE5` 未透過 `T.bg` 引用），與配色常數集中管理的假設精神不完全一致，但不影響本次比對結論。
 9. **【提示】`npm run build` 成功**，但有 chunk size 警告（`dist/assets/index-*.js` 634 KB，超過 500 KB 建議值），單檔 JSX 架構下屬預期現象，暫不影響爭點模組施工可行性。
+10. **【需處理】`anon` 角色具備三表完整權限（含 DELETE、TRUNCATE），policy 的 `roles` 為 `{public}`（涵蓋 anon）而非 `{authenticated}`**（G 節查詢 3、4）。目前不會出事，因 RLS 的 `auth.uid() = user_id` 對匿名使用者不成立；但違反最小權限原則——若某張表的 RLS 被關閉或 policy 寫錯，匿名使用者即可清空整張表。處置：收緊需執行 `REVOKE`，屬寫入操作，排入 Phase 2.5，本次不動。
+11. **【需處理】六段唯讀查詢未涵蓋主鍵與唯一約束**，而三表所有 upsert 均依賴 `onConflict`（`user_progress`: `user_id,question_id`；`user_stats`: `user_id`；`penguin_journal`: `user_id,date`，見 db.js:27,44、penguinJournal.js:75,134,159,172、App.jsx:1021），`onConflict` 指定欄位若無對應唯一約束會直接報錯，目前未驗證。已於 G 節附上查詢 7 的 SQL，待苳補跑並貼回結果後，需逐一核對上述三組 `onConflict` 鍵是否都有對應的唯一約束。
 
 ## 五、CLAUDE.md 待補值
 
