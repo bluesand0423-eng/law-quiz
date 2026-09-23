@@ -111,5 +111,8 @@ const MILESTONE_LABELS = {
 - 空白資料 ＜ 錯誤資料。不確定就留空或標【待查證】，絕不猜
 - 延後的是圖的複雜度，不是可見成果
 - 所有 Supabase 寫入必須 await、檢查 error、失敗可見；禁止 fire-and-forget
-- 建表 SOP 四步：CREATE TABLE → RLS policy → table-level GRANT
+- 建表 SOP 五步：CREATE TABLE → RLS policy（指定 TO authenticated）
+  → table-level GRANT 給 authenticated → REVOKE ALL FROM anon
   → 以非 service-role 金鑰實測讀寫
+  （Supabase 預設權限會自動授予 anon，其中 TRUNCATE 不受 RLS 保護，
+   故 REVOKE 為必要步驟，不可省略）
