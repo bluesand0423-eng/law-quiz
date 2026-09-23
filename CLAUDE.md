@@ -14,6 +14,15 @@
 ## 題庫結構
 共 530 題，涵蓋 114年（300題）與 113年（230題）司律一試，15 科。
 
+## 考古題擷取規則
+
+| 規則 | 說明 |
+|------|------|
+| 查詢路徑 | 一律走 `opendata-list_domains` → `opendata-search_datasets` → `opendata-get_exam_paper`；禁用 `search_exam_questions`（依賴 embedding，服務降級時靜默回空陣列） |
+| 空陣列判讀 | `questions` 陣列為空 ＝「沒查成」而非「沒有題目」，須改路徑重試，不可逕自改為自編 |
+| 科目分類 | 行政法在「綜合法學（一）」；民法在「綜合法學（二）」；兩者不同分類，勿掃錯 |
+| 批次原則 | 出題一律小批：一次 1–2 年度，邊做邊 append，context 接近滿載前先收尾，嚴禁一次處理全部 |
+
 ## localStorage 現有結構
 - key: lawquiz_prog_v1（作答進度）
   格式：{ "題目ID": { "stars": ["r"/"g"/"e","r"/"g"/"e",...], "attempts": 次數 } }
@@ -92,3 +101,15 @@ const MILESTONE_LABELS = {
   QUESTIONS_1000: "累積 1000 題",
 };
 ```
+
+## 開發原則
+
+北境書房可以接受功能暫時沒有，但不能接受
+「看起來成功、實際上資料沒有寫進去」。
+
+- 不要把「資料正確性問題」與「功能開發問題」混成同一個 phase
+- 空白資料 ＜ 錯誤資料。不確定就留空或標【待查證】，絕不猜
+- 延後的是圖的複雜度，不是可見成果
+- 所有 Supabase 寫入必須 await、檢查 error、失敗可見；禁止 fire-and-forget
+- 建表 SOP 四步：CREATE TABLE → RLS policy → table-level GRANT
+  → 以非 service-role 金鑰實測讀寫
