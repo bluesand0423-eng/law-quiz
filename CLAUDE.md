@@ -23,6 +23,15 @@
 | 科目分類 | 行政法在「綜合法學（一）」；民法在「綜合法學（二）」；兩者不同分類，勿掃錯 |
 | 批次原則 | 出題一律小批：一次 1–2 年度，邊做邊 append，context 接近滿載前先收尾，嚴禁一次處理全部 |
 
+### 題目物件的冰原欄位
+
+- `issues: string[]` — 對應的爭點卡 slug（苳的整理）
+- `statutes: string[]` — 對應的條號 canonical key（出題事實）
+
+兩者各自獨立：出題頻率只看 `statutes`，不受爭點卡進度影響。
+**不預先為所有題目加空陣列**；程式一律透過 `src/icefield/questionFields.js`
+的存取器讀取，欄位不存在即視為空。新匯入的題目有標註才帶欄位。
+
 ## localStorage 現有結構
 - key: lawquiz_prog_v1（作答進度）
   格式：{ "題目ID": { "stars": ["r"/"g"/"e","r"/"g"/"e",...], "attempts": 次數 } }
