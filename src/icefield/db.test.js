@@ -13,6 +13,7 @@ import {
   setStatutes,
   getIssue,
   getLinks,
+  updateLinkType,
 } from "./db";
 
 beforeEach(() => {
@@ -232,6 +233,39 @@ describe("getLinks：cross_subject 對稱邊查詢", () => {
 
     await getLinks("cvp-014");
     expect(orSpy).toHaveBeenCalledWith("from_slug.eq.cvp-014,to_slug.eq.cvp-014");
+  });
+
+});
+
+describe("updateLinkType：手動重新分類", () => {
+
+  it("合法 link_type 時送出 update", async () => {
+    const updateSpy = vi.fn(() => ({
+      eq: () => ({
+        eq: () => ({
+          select: () => ({
+            maybeSingle: () => Promise.resolve({ data: { link_type: "prerequisite" }, error: null }),
+          }),
+        }),
+      }),
+    }));
+    supabase.from.mockImplementation((table) => {
+      if (table === "issue_links") return { update: updateSpy };
+      throw new Error(`測試未預期呼叫 supabase.from("${table}")`);
+    });
+
+    const result = await updateLinkType("cvp-014", "cvp-007", "prerequisite");
+    expect(updateSpy).toHaveBeenCalledWith({ link_type: "prerequisite" });
+    expect(result.data.link_type).toBe("prerequisite");
+  });
+
+  it("不合法的 link_type（如 opposes）直接拒絕，不觸及 Supabase", async () => {
+    supabase.from.mockImplementation((table) => {
+      throw new Error(`不合法 link_type 應中止，不應呼叫 supabase.from("${table}")`);
+    });
+
+    const result = await updateLinkType("cvp-014", "cvp-007", "opposes");
+    expect(result.error).toBeTruthy();
   });
 
 });

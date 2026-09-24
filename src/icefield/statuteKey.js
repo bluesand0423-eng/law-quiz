@@ -1,8 +1,9 @@
 // 條號的解析與中文格式化——canonical format 集中於此兩支函式，
 // 禁止在其他地方自行拼字串或 split("-") 處理 statute_key。
 
-// 15 科法規代碼對照表（依 CLAUDE.md 科目代碼常數）
-const CODE_TO_LAW_NAME = {
+// 15 科法規代碼對照表（依 CLAUDE.md 科目代碼常數）；匯出供 UI 科目下拉沿用，
+// 避免在畫面層另建一份。
+export const CODE_TO_LAW_NAME = {
   civ: "民法",
   cri: "刑法",
   con: "憲法",

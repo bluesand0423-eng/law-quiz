@@ -265,4 +265,28 @@ export async function upsertLinks(slug, statementText) {
   return { data: { inserted: toInsert.length, removed: toRemove.length } };
 }
 
+// 手動重新分類一條既有連結的 link_type（例如 related → prerequisite）。
+// 階段三未定義此函式；階段四畫面需要讓使用者手動調整分類才補上，
+// upsertLinks 本身仍然完全不覆寫既有連結，兩者職責分開。
+export async function updateLinkType(fromSlug, toSlug, linkType) {
+  if (!LINK_TYPES.includes(linkType)) {
+    const error = { message: `不合法的 link_type：${linkType}` };
+    console.error("[updateLinkType]", error.message);
+    return { error };
+  }
+
+  const { data, error } = await supabase
+    .from("issue_links")
+    .update({ link_type: linkType })
+    .eq("from_slug", fromSlug)
+    .eq("to_slug", toSlug)
+    .select()
+    .maybeSingle();
+  if (error) {
+    console.error("[updateLinkType] issue_links update 失敗：", error);
+    return { error };
+  }
+  return { data };
+}
+
 export { LINK_TYPES };

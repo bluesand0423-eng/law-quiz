@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import { fetchProgress, upsertProgress, batchUpsertProgress, clearProgress, migrateFromLocalStorage, getTodayMemory } from "./db";
 import { saveDailyJournal, getPenguinNote, updateUserStats } from "./penguinJournal";
+import IcefieldApp from "./icefield/IcefieldApp";
 
 const LAW_PCODE_MAP = {
   "民法": "B0000001",
@@ -1364,6 +1365,7 @@ export default function App(){
                   <div style={{display:"flex",justifyContent:"flex-end",gap:"0.75rem",marginTop:"0.55rem"}}>
                     <button onClick={openJournal} style={{background:"none",border:"none",color:T.faint,fontSize:"0.7rem",cursor:"pointer",fontFamily:"'Noto Sans TC',sans-serif",padding:0,letterSpacing:"0.02em"}}>查看全部日誌 →</button>
                     <button onClick={()=>{setMode("journey");if(userRef.current)loadJourneyData(userRef.current.id);}} style={{background:"none",border:"none",color:T.faint,fontSize:"0.7rem",cursor:"pointer",fontFamily:"'Noto Sans TC',sans-serif",padding:0,letterSpacing:"0.02em"}}>我們的旅程 →</button>
+                    <button onClick={()=>setMode("icefield")} style={{background:"none",border:"none",color:T.faint,fontSize:"0.7rem",cursor:"pointer",fontFamily:"'Noto Sans TC',sans-serif",padding:0,letterSpacing:"0.02em"}}>爭點卡 →</button>
                   </div>
                 </>
               ):(
@@ -1407,6 +1409,11 @@ export default function App(){
             </div>
           );
         })()}
+
+        {/* ── 冰原：爭點卡 ── */}
+        {mode==="icefield"&&(
+          <IcefieldApp T={T} notifySyncFailure={notifySyncFailure} onExit={()=>setMode("filter")} />
+        )}
 
         {/* ── 篩選 ── */}
         {mode==="filter"&&(
