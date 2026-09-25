@@ -29,6 +29,7 @@ export default function IssueForm({ T, slug, notifySyncFailure, onSaved, onCance
   const [statuteRaws, setStatuteRaws] = useState([]);
   const [statuteInput, setStatuteInput] = useState("");
   const [statuteInputError, setStatuteInputError] = useState("");
+  const [sources, setSources] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -53,6 +54,7 @@ export default function IssueForm({ T, slug, notifySyncFailure, onSaved, onCance
       setStatus(issue.status || "draft");
       setPracticeDivergent(!!issue.practice_divergent);
       setExamRefs(issue.external_exam_refs || []);
+      setSources(issue.sources || "");
       setStatuteRaws((statuteRows || []).map(statuteRowToRaw));
       setLoading(false);
     })();
@@ -97,6 +99,7 @@ export default function IssueForm({ T, slug, notifySyncFailure, onSaved, onCance
       status,
       practice_divergent: practiceDivergent,
       external_exam_refs: examRefs,
+      sources,
     };
 
     let targetSlug = slug;
@@ -206,6 +209,9 @@ export default function IssueForm({ T, slug, notifySyncFailure, onSaved, onCance
             );
           })}
         </div>
+
+        <label style={{ ...label, marginTop: "0.5rem" }}>出處與要件文字</label>
+        <textarea value={sources} onChange={e => setSources(e.target.value)} rows={4} placeholder="要件文字、實務見解摘要。未經覆核請標【待查證】" style={{ ...inputStyle, resize: "vertical" }} />
       </div>
 
       <div style={cardStyle}>

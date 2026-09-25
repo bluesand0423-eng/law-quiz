@@ -171,6 +171,9 @@ export default function IssueDetail({ T, slug, onBack, onEdit }) {
             </div>
           );
         })}
+        {issue.sources && (
+          <p style={{ fontSize: "0.82rem", color: T.ink, marginTop: "0.6rem", paddingTop: "0.6rem", borderTop: `1px solid ${T.bdr}`, whiteSpace: "pre-wrap" }}>{issue.sources}</p>
+        )}
       </div>
 
       <div style={cardStyle}>
