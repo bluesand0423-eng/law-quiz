@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { listIssues, getLinks } from "./db";
 import { computeDisplayStatus } from "./issueDisplay";
-import { CODE_TO_LAW_NAME } from "./statuteKey";
+import { SUBJECTS } from "./subjects";
 
 const STATUS_LABEL = { draft: "草稿", active: "進行中", verified: "已覆核" };
-const SUBJECT_OPTIONS = Object.entries(CODE_TO_LAW_NAME);
+const SUBJECT_OPTIONS = Object.entries(SUBJECTS);
 
 export default function IssueList({ T, onOpen, onCreate, onBack }) {
   const [subject, setSubject] = useState("");
@@ -87,7 +87,7 @@ export default function IssueList({ T, onOpen, onCreate, onBack }) {
             <div key={issue.slug} style={card} onClick={() => onOpen(issue.slug)}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.5rem" }}>
                 <span style={{ fontSize: "0.92rem", fontWeight: 500, color: T.ink, fontFamily: "'Noto Serif TC',serif" }}>{issue.title || "（未命名）"}</span>
-                <span style={{ fontSize: "0.7rem", color: T.muted, whiteSpace: "nowrap" }}>{CODE_TO_LAW_NAME[issue.subject] ?? issue.subject}</span>
+                <span style={{ fontSize: "0.7rem", color: T.muted, whiteSpace: "nowrap" }}>{SUBJECTS[issue.subject] ?? issue.subject}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.35rem" }}>
                 <span style={{ fontSize: "0.72rem", color: disp?.note ? T.gold : T.muted, fontFamily: "'Noto Sans TC',sans-serif" }}>

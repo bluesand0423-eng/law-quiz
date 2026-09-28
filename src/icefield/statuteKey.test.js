@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseStatuteKey, formatStatuteKey } from "./statuteKey";
+import { parseStatuteKey, formatStatuteKey, getPcode } from "./statuteKey";
 
 describe("parseStatuteKey", () => {
 
@@ -27,6 +27,10 @@ describe("parseStatuteKey", () => {
     expect(parseStatuteKey("xyz-100")).toBeNull();
   });
 
+  it("考科代碼（非法典代碼）不得當法典用：adm-1 → null（adm 一科多法，已從法典代碼表移除）", () => {
+    expect(parseStatuteKey("adm-1")).toBeNull();
+  });
+
   it("條號非數字 → null", () => {
     expect(parseStatuteKey("civ-abc")).toBeNull();
   });
@@ -50,7 +54,7 @@ describe("parseStatuteKey", () => {
   });
 
   it("round-trip：解析結果組回字串應與原輸入一致", () => {
-    const cases = ["civ-242", "civ-184-1-front", "cvp-400-1", "civ-244-1-2", "adm-92-1-back"];
+    const cases = ["civ-242", "civ-184-1-front", "cvp-400-1", "civ-244-1-2", "con-8-2-back"];
     for (const raw of cases) {
       const parsed = parseStatuteKey(raw);
       const rebuilt = parsed.location ? `${parsed.key}-${parsed.location}` : parsed.key;
@@ -90,6 +94,10 @@ describe("formatStatuteKey", () => {
     expect(formatStatuteKey({ key: "xyz-100", location: "" })).toBeNull();
   });
 
+  it("考科代碼不得當法典用：adm-1 → null（adm 已不在代碼表中）", () => {
+    expect(formatStatuteKey({ key: "adm-1", location: "" })).toBeNull();
+  });
+
   it("location 格式錯誤 → null", () => {
     expect(formatStatuteKey({ key: "civ-242", location: "front" })).toBeNull();
   });
@@ -98,4 +106,21 @@ describe("formatStatuteKey", () => {
     expect(formatStatuteKey({ key: "civ", location: "" })).toBeNull();
     expect(formatStatuteKey({})).toBeNull();
   });
+});
+
+describe("getPcode", () => {
+
+  it("有 pcode：civ-242 → B0000001", () => {
+    expect(getPcode("civ-242")).toBe("B0000001");
+  });
+
+  it("pcode 為空字串（尚待查證）：sec-1 → null", () => {
+    expect(getPcode("sec-1")).toBeNull();
+  });
+
+  it("未知代碼 → null", () => {
+    expect(getPcode("adm-1")).toBeNull();
+    expect(getPcode("xyz-1")).toBeNull();
+  });
+
 });

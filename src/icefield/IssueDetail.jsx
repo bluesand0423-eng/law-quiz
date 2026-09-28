@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { getIssue, getLinks, getStatutes, updateIssue, setArchived, updateLinkType, LINK_TYPES } from "./db";
 import { computeDisplayStatus } from "./issueDisplay";
-import { CODE_TO_LAW_NAME, formatStatuteKey } from "./statuteKey";
+import { formatStatuteKey } from "./statuteKey";
+import { SUBJECTS } from "./subjects";
 
 const STATUS_LABEL = { draft: "草稿", active: "進行中", verified: "已覆核" };
 const LINK_TYPE_LABEL = { prerequisite: "前提", cross_subject: "跨科", related: "相關" };
@@ -105,7 +106,7 @@ export default function IssueDetail({ T, slug, onBack, onEdit }) {
           <button onClick={() => onEdit(slug)} style={{ background: "none", border: `1px solid ${T.bdr}`, borderRadius: 8, color: T.ink, fontSize: "0.75rem", cursor: "pointer", padding: "0.2rem 0.6rem", height: "fit-content" }}>編輯</button>
         </div>
         <div style={{ fontSize: "0.75rem", color: T.muted, marginTop: "0.25rem" }}>
-          {CODE_TO_LAW_NAME[issue.subject] ?? issue.subject}・{issue.slug}
+          {SUBJECTS[issue.subject] ?? issue.subject}・{issue.slug}
         </div>
         {issue.statement && <p style={{ fontSize: "0.88rem", color: T.ink, marginTop: "0.6rem", whiteSpace: "pre-wrap" }}>{issue.statement}</p>}
 

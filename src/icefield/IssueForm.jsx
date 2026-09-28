@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { getIssue, getStatutes, createIssue, updateIssue, setStatutes, upsertLinks } from "./db";
-import { parseStatuteKey, formatStatuteKey, CODE_TO_LAW_NAME } from "./statuteKey";
+import { parseStatuteKey, formatStatuteKey } from "./statuteKey";
+import { LAW_CODES } from "./lawCodes";
+import { SUBJECTS } from "./subjects";
 
 const STATUS_LABEL = { draft: "草稿", active: "進行中", verified: "已覆核" };
-const SUBJECT_OPTIONS = Object.entries(CODE_TO_LAW_NAME);
+const SUBJECT_OPTIONS = Object.entries(SUBJECTS);
+const LAW_OPTIONS = Object.entries(LAW_CODES);
 const VIEW_TYPES = ["通說", "有力說", "實務"];
 
 function emptyViews() {
@@ -27,7 +30,8 @@ export default function IssueForm({ T, slug, notifySyncFailure, onSaved, onCance
   const [examRefs, setExamRefs] = useState([]);
   const [examRefInput, setExamRefInput] = useState("");
   const [statuteRaws, setStatuteRaws] = useState([]);
-  const [statuteInput, setStatuteInput] = useState("");
+  const [statuteLaw, setStatuteLaw] = useState(LAW_OPTIONS[0][0]);
+  const [statuteArticle, setStatuteArticle] = useState("");
   const [statuteInputError, setStatuteInputError] = useState("");
   const [sources, setSources] = useState("");
   const [saving, setSaving] = useState(false);
@@ -75,14 +79,15 @@ export default function IssueForm({ T, slug, notifySyncFailure, onSaved, onCance
   }
 
   function addStatute() {
-    const raw = statuteInput.trim();
-    if (!raw) return;
+    const article = statuteArticle.trim();
+    if (!article) return;
+    const raw = `${statuteLaw}-${article}`;
     if (!parseStatuteKey(raw)) {
       setStatuteInputError("看不懂這個條號格式，未加入。");
       return;
     }
     setStatuteRaws(list => [...list, raw]);
-    setStatuteInput("");
+    setStatuteArticle("");
     setStatuteInputError("");
   }
   function removeStatute(i) {
@@ -192,8 +197,12 @@ export default function IssueForm({ T, slug, notifySyncFailure, onSaved, onCance
 
       <div style={cardStyle}>
         <div style={{ fontSize: "0.8rem", fontWeight: 600, color: T.ink, marginBottom: "0.5rem" }}>涉及條號</div>
+        <p style={{ fontSize: "0.72rem", color: T.faint, margin: "0 0 0.4rem" }}>法典與考科各自獨立，不受上方「科目」限制，可跨科標註。</p>
         <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.4rem" }}>
-          <input value={statuteInput} onChange={e => { setStatuteInput(e.target.value); setStatuteInputError(""); }} placeholder="例：civ-184-1-front" style={inputStyle} />
+          <select value={statuteLaw} onChange={e => { setStatuteLaw(e.target.value); setStatuteInputError(""); }} style={{ ...inputStyle, width: "auto", flex: "0 0 auto" }}>
+            {LAW_OPTIONS.map(([code, info]) => <option key={code} value={code}>{info.name}</option>)}
+          </select>
+          <input value={statuteArticle} onChange={e => { setStatuteArticle(e.target.value); setStatuteInputError(""); }} placeholder="條號，如 184-1-front" style={inputStyle} />
           <button onClick={addStatute} style={{ padding: "0.5rem 0.8rem", background: T.cta, color: "#ECEAE5", border: "none", borderRadius: 8, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>加入</button>
         </div>
         {statuteInputError && <p style={{ color: T.red, fontSize: "0.75rem", margin: "0 0 0.4rem" }}>{statuteInputError}</p>}
