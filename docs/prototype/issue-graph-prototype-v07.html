@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>北境書房｜法條大廳 × 爭點網絡 v0.7</title>
+<style>
+:root{
+  --paper:#ECEAE5; --sand:#DDD9D2; --ink:#4C3D3E; --ink-soft:#6E5C5D; --ink-faint:#96878A;
+  --mist:#798E9D; --rose:#A88B8B; --moss:#7D8B6A; --gold:#A88A52; --line:#D5CFC7; --card:#F5F3EF;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#221C1D; --sand:#2E2627; --ink:#E4DED8; --ink-soft:#B4A8A3; --ink-faint:#8B7D7B;
+    --mist:#8FA3B1; --rose:#BE9D9D; --moss:#93A17E; --gold:#C6A469; --line:#413738; --card:#2A2324;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#221C1D; --sand:#2E2627; --ink:#E4DED8; --ink-soft:#B4A8A3; --ink-faint:#8B7D7B;
+  --mist:#8FA3B1; --rose:#BE9D9D; --moss:#93A17E; --gold:#C6A469; --line:#413738; --card:#2A2324;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;height:100%;color:var(--ink);
+  background:
+    radial-gradient(130% 55% at 50% -12%, rgba(121,142,157,.16), transparent 62%),
+    radial-gradient(90% 40% at 88% 4%, rgba(168,139,139,.09), transparent 70%),
+    var(--paper);
+  background-attachment:fixed;
+  font-family:"Noto Serif TC","Songti TC",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  -webkit-font-smoothing:antialiased;line-height:1.75}
+.wrap{max-width:760px;margin:0 auto;padding:22px 18px 48px}
+h1{font-size:1.06rem;font-weight:500;margin:0 0 6px;letter-spacing:.09em}
+.sub{margin:0 0 20px;font-size:.74rem;line-height:1.85;color:var(--ink-faint)}
+
+/* ---- 搜尋 ---- */
+.search{display:flex;gap:8px;margin-bottom:20px}
+.search select,.search input{
+  font:inherit;font-size:.86rem;color:var(--ink);background:var(--card);
+  border:1px solid var(--line);border-radius:8px;padding:9px 11px;line-height:1.4;
+  -webkit-appearance:none;appearance:none;
+}
+.search select{flex:0 0 40%;background-image:linear-gradient(45deg,transparent 50%,var(--ink-faint) 50%),linear-gradient(135deg,var(--ink-faint) 50%,transparent 50%);
+  background-position:calc(100% - 15px) 18px,calc(100% - 11px) 18px;background-size:4px 4px,4px 4px;background-repeat:no-repeat}
+.search input{flex:1;min-width:0}
+.search input::placeholder{color:var(--ink-faint)}
+.search input:focus,.search select:focus{outline:none;border-color:var(--ink-soft)}
+
+/* ---- 清單 ---- */
+.group{margin-bottom:26px}
+.group > h2{font-size:.72rem;font-weight:400;letter-spacing:.2em;color:var(--ink-faint);
+  margin:0 0 4px;padding-left:2px}
+ul.list{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+ul.list li{display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid var(--line);padding:2px 2px}
+.mark{flex:0 0 58px;background:none;border:none;padding:13px 0;cursor:pointer;
+  display:flex;gap:3px;align-items:center;justify-content:flex-start}
+.mark svg{display:block}
+.open{flex:1;background:none;border:none;font:inherit;color:var(--ink);text-align:left;
+  cursor:pointer;padding:12px 4px 12px 0;display:flex;align-items:baseline;gap:10px;min-width:0}
+.open .name{font-size:.94rem;letter-spacing:.02em;white-space:nowrap}
+.open .meta{font-size:.68rem;color:var(--ink-faint);letter-spacing:.04em;margin-left:auto;
+  white-space:nowrap;flex:0 0 auto}
+.open:hover .name{color:var(--mist)}
+.alert{flex:0 0 14px;display:flex;align-items:center;justify-content:center;
+  padding:12px 0;opacity:.8}
+.alert svg{display:block}
+.empty{font-size:.78rem;color:var(--ink-faint);padding:22px 2px}
+
+/* ---- 房間 ---- */
+.back{font:inherit;font-size:.76rem;background:none;border:none;color:var(--mist);
+  cursor:pointer;padding:0 0 4px;margin-bottom:12px;letter-spacing:.04em}
+.bar{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0 12px}
+.chip{font:inherit;font-size:.7rem;padding:6px 11px;border-radius:999px;letter-spacing:.04em;
+  border:1px solid var(--line);background:transparent;color:var(--ink-faint);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--sand);color:var(--ink);border-color:transparent}
+.chip .dot{display:inline-block;width:9px;height:2px;margin-right:6px;vertical-align:middle}
+.stage{position:relative;border:1px solid var(--line);border-radius:12px;
+  background:var(--card);overflow:hidden;touch-action:none}
+svg.graph{display:block;width:100%;height:44vh;min-height:250px}
+.hint{position:absolute;left:12px;bottom:9px;font-size:.62rem;color:var(--ink-faint);opacity:.7;pointer-events:none}
+.node circle{cursor:pointer}
+.node text{font-size:9px;fill:var(--ink);pointer-events:none;text-anchor:middle}
+.node .slug{font-size:7.5px;fill:var(--ink-faint)}
+.node .statlab{font-size:11.5px;fill:var(--ink);font-weight:600}
+.node .statsub{font-size:7.5px;fill:var(--gold)}
+.dimmed{opacity:.4}
+
+.panel{margin-top:14px;border:1px solid var(--line);border-radius:12px;background:var(--card);padding:16px 17px}
+.panel.stat{border-left:3px solid var(--ink-soft)}
+.panel h3{font-size:.94rem;font-weight:500;margin:0 0 3px;line-height:1.6}
+.slugline{font-size:.68rem;color:var(--ink-faint);margin:0 0 12px;letter-spacing:.07em}
+.tag{display:inline-block;font-size:.66rem;padding:3px 8px;border-radius:5px;
+  border:1px solid var(--line);margin:0 6px 5px 0;color:var(--ink-faint);letter-spacing:.03em}
+.tag.v{border-color:var(--moss);color:var(--moss)}
+.tag.s{border-color:transparent;background:var(--sand);color:var(--ink-soft)}
+.tag.go{cursor:pointer}
+.tag.go:hover{border-color:var(--ink-soft);color:var(--ink)}
+.field{margin:12px 0 0;font-size:.79rem;line-height:1.9}
+.field b{display:block;font-size:.66rem;color:var(--ink-faint);font-weight:400;letter-spacing:.14em;margin-bottom:3px}
+.edges{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.edges h4{font-size:.66rem;margin:0 0 7px;color:var(--ink-faint);font-weight:400;letter-spacing:.14em}
+.edges ul{list-style:none;margin:0 0 10px;padding:0}
+.edges li{font-size:.77rem;line-height:2}
+.edges a{color:var(--mist);text-decoration:none;cursor:pointer;border-bottom:1px solid transparent}
+.edges a:hover{border-bottom-color:var(--line)}
+.et{font-size:.63rem;color:var(--ink-faint);margin-right:7px;letter-spacing:.04em}
+.q{font-size:.73rem;color:var(--ink-faint);line-height:2.1}
+.q .wrong{color:var(--rose)}
+.q .right{color:var(--moss)}
+footer{margin-top:24px;font-size:.67rem;line-height:2;color:var(--ink-faint)}
+footer code{background:var(--sand);padding:1px 5px;border-radius:4px;font-size:.92em}
+.hide{display:none}
+
+/* ===== 夜色紙品語彙（取素材的結構，不搬其質感貼圖） ===== */
+h1{position:relative;padding-left:20px}
+h1::before{content:"";position:absolute;left:0;top:.62em;width:12px;height:12px;
+  border-radius:50%;box-shadow:inset -3.4px 1.4px 0 0 var(--gold);opacity:.9}
+.group > h2::before{content:"";display:inline-block;width:16px;height:1px;
+  background:var(--gold);vertical-align:middle;margin-right:9px;opacity:.75}
+ul.list{border-top:1px solid color-mix(in srgb,var(--gold) 55%,transparent)}
+ul.list li{transition:background .18s}
+ul.list li:hover{background:color-mix(in srgb,var(--mist) 8%,transparent)}
+.panel{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--gold) 20%,transparent)}
+.panel.stat{border-left-color:var(--gold)}
+.stage{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--gold) 16%,transparent)}
+.search select:focus,.search input:focus{border-color:var(--gold)}
+.chip[aria-pressed="true"]{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--gold) 34%,transparent)}
+.tag.v{border-color:color-mix(in srgb,var(--gold) 60%,transparent);color:var(--gold)}
+#room h1{display:inline-block;padding:2px 16px 2px 22px;
+  border:1px solid color-mix(in srgb,var(--gold) 40%,transparent);
+  border-radius:3px 13px 13px 3px;background:var(--card)}
+#room h1::before{left:8px}
+.edges h4{display:flex;align-items:center;gap:10px}
+.edges h4::after{content:"";flex:1;height:1px;background:var(--line);max-width:140px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ================= 大廳 ================= -->
+<section id="lobby">
+  <h1>法條大廳</h1>
+  <p class="sub">先選法規，再輸入條號或關鍵字。清單非人工編纂之常見法條表，係由爭點卡與題庫命中即時彙算。示範資料，條文內容【待查證】。</p>
+
+  <div class="search">
+    <select id="lawSel" aria-label="選擇法規"></select>
+    <input id="q" type="search" inputmode="text" placeholder="條號或關鍵字" aria-label="搜尋條號或關鍵字">
+  </div>
+
+  <div class="bar" id="sortbar">
+    <button class="chip" data-sort="w" aria-pressed="true">依重要度</button>
+    <button class="chip" data-sort="q" aria-pressed="false">依題目命中</button>
+    <button class="chip" data-sort="i" aria-pressed="false">依爭點數</button>
+    <button class="chip" data-sort="n" aria-pressed="false">依條號</button>
+  </div>
+
+  <div id="lobbyList"></div>
+
+  <footer>
+    <p>左側標記為<b>重要度</b>，點擊可調整（零至三級）。目前僅存在記憶體中，重新整理即消失；正式版需要一張 <code>statute_meta</code> 小表承載。</p>
+    <p>右緣細小記號表示該條底下<b>尚有未覆核的爭點卡</b>，僅標示存在與否，不計數、不催促。</p>
+    <p>圖形皆為暫用佔位，集中於原始碼的 <code>MARK_SHAPES</code> 與 <code>ALERT_SHAPE</code>；替換素材時只需改那兩處。</p>
+  </footer>
+</section>
+
+<!-- ================= 房間 ================= -->
+<section id="room" class="hide">
+  <button class="back" id="backBtn">← 回法條大廳</button>
+  <h1 id="roomTitle"></h1>
+  <p class="sub" id="roomSub"></p>
+  <div class="bar">
+    <button class="chip" data-t="prerequisite" aria-pressed="true"><span class="dot" style="background:var(--mist)"></span>前提要件</button>
+    <button class="chip" data-t="opposes" aria-pressed="true"><span class="dot" style="background:var(--rose)"></span>對立</button>
+    <button class="chip" data-t="cross_subject" aria-pressed="true"><span class="dot" style="background:var(--moss)"></span>跨科</button>
+    <button class="chip" data-t="related" aria-pressed="true"><span class="dot" style="background:var(--line)"></span>關聯</button>
+    <button class="chip" id="ringBtn" aria-pressed="true">外圈鄰居</button>
+    <button class="chip" id="resetBtn" aria-pressed="false">重新佈局</button>
+  </div>
+  <div class="stage">
+    <svg id="svg" class="graph"><g id="view"><g id="links"></g><g id="nodes"></g></g></svg>
+    <div class="hint" id="hint"></div>
+  </div>
+  <div class="panel" id="panel"></div>
+  <footer>
+    <p>實心為本條直接引用的爭點，空心外圈為其連出去的鄰居；跨科路徑即由外圈走出。</p>
+    <p>法條節點為衍生物，資料仍只有 <code>issues</code> 與 <code>issue_links</code> 兩張表。</p>
+  </footer>
+</section>
+
+</div>
+
+<script>
+/* =====================================================================
+   重要度標記圖形　—　替換點
+   之後把你設計的圖像換進這裡即可，其餘程式不需更動。
+   每個 shape 為一段 SVG 內容（座標系 0 0 12 12）。
+   ===================================================================== */
+const MARK_SHAPES = {
+  filled: '<path d="M6 1.4 L8.1 5 L6 10.6 L3.9 5 Z" fill="var(--gold)"/>',
+  empty:  '<path d="M6 1.4 L8.1 5 L6 10.6 L3.9 5 Z" fill="none" stroke="var(--line)" stroke-width="1"/>'
+};
+/* 待覆核警示：同為菱形語彙的窄豎筆＋一點，置於列的最右緣 */
+const ALERT_SHAPE =
+  '<path d="M6 1.6 L6.9 4 L6 8 L5.1 4 Z" fill="var(--rose)"/>' +
+  '<path d="M6 9.4 L6.8 10.3 L6 11.2 L5.2 10.3 Z" fill="var(--rose)"/>';
+function markSVG(on){
+  return `<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">${on ? MARK_SHAPES.filled : MARK_SHAPES.empty}</svg>`;
+}
+function alertSVG(){
+  return `<svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">${ALERT_SHAPE}</svg>`;
+}
+const MAX_WEIGHT = 3;
+
+// ================= 示範資料 =================
+const LAWS = [
+  {code:"civ", name:"民法"},
+  {code:"cvp", name:"民事訴訟法"},
+  {code:"enf", name:"強制執行法"}
+];
+const LAW = {}; LAWS.forEach(l => LAW[l.code] = l.name);
+
+const ISSUES = [
+  {id:"civ-101", t:"債權人代位權之要件為何？", s:"civ", st:"verified",
+   stmt:"債權人於何種要件下得代位行使債務人之權利？", stat:["civ-242","civ-243"], v:"【待查證】"},
+  {id:"civ-102", t:"代位權範圍是否以保全必要為限？", s:"civ", st:"active",
+   stmt:"代位權之行使範圍應否受保全必要性限制？", stat:["civ-242"], v:"限制說／不限制說。【待查證】"},
+  {id:"civ-103", t:"「怠於行使」之判斷標準為何？", s:"civ", st:"active",
+   stmt:"債務人怠於行使權利之認定應採何標準？", stat:["civ-242"], v:"【待查證】"},
+  {id:"civ-104", t:"代位行使之效果歸屬於何人？", s:"civ", st:"draft",
+   stmt:"代位行使所得利益應歸屬債務人或債權人？", stat:["civ-243"], v:"【待查證】"},
+  {id:"civ-110", t:"無權代理人對善意相對人之責任性質為何？", s:"civ", st:"active",
+   stmt:"民法第110條所定責任係無過失責任或過失責任？", stat:["civ-110"], v:"【待查證】"},
+  {id:"cvp-201", t:"代位訴訟中債權人之當事人適格如何認定？", s:"cvp", st:"active",
+   stmt:"債權人提起代位訴訟時，其當事人適格基礎為何？", stat:["cvp-40"], v:"【待查證】"},
+  {id:"cvp-202", t:"代位訴訟判決之既判力是否及於債務人？", s:"cvp", st:"draft",
+   stmt:"代位訴訟確定判決之既判力主觀範圍是否擴張至債務人？", stat:["cvp-401-2"], v:"【待查證】"},
+  {id:"cvp-203", t:"既判力客觀範圍如何界定？", s:"cvp", st:"verified",
+   stmt:"確定判決之既判力及於何種範圍？", stat:["cvp-400-1"], v:"【待查證】"},
+  {id:"cvp-204", t:"訴訟標的之識別應採何種理論？", s:"cvp", st:"active",
+   stmt:"訴訟標的識別基準應如何建構？", stat:["cvp-244-1-2","cvp-400-1"], v:"新說／舊說。【待查證】"},
+  {id:"cvp-205", t:"舊訴訟標的理論能否妥適處理重複起訴？", s:"cvp", st:"active",
+   stmt:"以舊說為基準時，重複起訴禁止之適用是否過窄？", stat:["cvp-253"], v:"【待查證】"},
+  {id:"cvp-206", t:"債務人未參與訴訟時程序保障如何確保？", s:"cvp", st:"draft",
+   stmt:"既判力擴張時，未參與程序之人其聽審請求權如何保障？", stat:["cvp-67-1"], v:"【待查證】"},
+  {id:"enf-301", t:"執行力主觀範圍是否及於代位債務人？", s:"enf", st:"draft",
+   stmt:"執行名義之執行力主觀範圍是否擴張？", stat:["enf-4-2"], v:"【待查證】"},
+  {id:"enf-302", t:"既判力與執行力應如何區辨？", s:"enf", st:"active",
+   stmt:"既判力與執行力之主觀範圍是否必然一致？", stat:["enf-4-2","cvp-400-1"], v:"【待查證】"}
+];
+const LINKS = [
+  {a:"civ-101", b:"civ-102", t:"prerequisite"},
+  {a:"civ-101", b:"civ-103", t:"prerequisite"},
+  {a:"civ-101", b:"cvp-201", t:"cross_subject"},
+  {a:"civ-102", b:"civ-104", t:"related"},
+  {a:"civ-101", b:"civ-110", t:"related"},
+  {a:"cvp-201", b:"cvp-202", t:"prerequisite"},
+  {a:"cvp-202", b:"cvp-203", t:"prerequisite"},
+  {a:"cvp-203", b:"cvp-204", t:"prerequisite"},
+  {a:"cvp-204", b:"cvp-205", t:"opposes"},
+  {a:"cvp-202", b:"enf-301", t:"cross_subject"},
+  {a:"enf-301", b:"enf-302", t:"prerequisite"},
+  {a:"cvp-203", b:"enf-302", t:"related"},
+  {a:"cvp-202", b:"cvp-206", t:"prerequisite"}
+];
+const QUESTIONS = [
+  {id:"civ114-012", ok:false, issues:["civ-101"]},
+  {id:"civ114-031", ok:true,  issues:["civ-101","civ-103"]},
+  {id:"civ113-008", ok:false, issues:["civ-102"]},
+  {id:"civ113-044", ok:true,  issues:["civ-104"]},
+  {id:"civ114-052", ok:false, issues:["civ-110"]},
+  {id:"civ113-061", ok:true,  issues:["civ-110"]},
+  {id:"cvp114-003", ok:false, issues:["cvp-201"]},
+  {id:"cvp114-018", ok:false, issues:["cvp-202","cvp-203"]},
+  {id:"cvp113-022", ok:true,  issues:["cvp-203"]},
+  {id:"cvp114-040", ok:false, issues:["cvp-204"]},
+  {id:"cvp113-047", ok:true,  issues:["cvp-204","cvp-205"]},
+  {id:"cvp114-055", ok:false, issues:["cvp-206"]},
+  {id:"enf114-007", ok:false, issues:["enf-301"]},
+  {id:"enf113-014", ok:true,  issues:["enf-302"]}
+];
+const TYPE = {
+  prerequisite:{label:"前提要件", color:"var(--mist)", dash:"",      arrow:true,  sym:false},
+  opposes:     {label:"對立",     color:"var(--rose)", dash:"5 4",   arrow:false, sym:true},
+  cross_subject:{label:"跨科",    color:"var(--moss)", dash:"1.5 4", arrow:false, sym:true},
+  related:     {label:"關聯",     color:"var(--line)", dash:"",      arrow:false, sym:false}
+};
+
+// ================= 索引 =================
+const I = {}; ISSUES.forEach(n => I[n.id] = n);
+function parseStat(raw){
+  const p = raw.split("-"), key = p.slice(0,2).join("-"), rest = p.slice(2);
+  let d = "";
+  if (rest[0]) d += "第" + rest[0] + "項";
+  if (rest[1]) d += (rest[1]==="front"?"前段":rest[1]==="back"?"後段":"第"+rest[1]+"款");
+  return {key, detail:d};
+}
+function lawOf(key){ return LAW[key.split("-")[0]] || key.split("-")[0]; }
+function numOf(key){ return key.split("-")[1]; }
+function statName(key){ return lawOf(key) + "第 " + numOf(key) + " 條"; }
+
+const STAT = {};
+ISSUES.forEach(n => (n.stat||[]).forEach(raw => {
+  const {key, detail} = parseStat(raw);
+  if (!STAT[key]) STAT[key] = {key, law:key.split("-")[0], num:+numOf(key), refs:[], qs:new Set()};
+  STAT[key].refs.push({issue:n.id, detail});
+}));
+QUESTIONS.forEach(q => q.issues.forEach(iid =>
+  (I[iid].stat||[]).forEach(raw => {
+    const k = parseStat(raw).key;
+    if (STAT[k]) STAT[k].qs.add(q.id);
+  })));
+const adjI = {}; ISSUES.forEach(n => adjI[n.id] = []);
+LINKS.forEach(l => { adjI[l.a].push(l); adjI[l.b].push(l); });
+function qsOf(iid){ return QUESTIONS.filter(q => q.issues.includes(iid)); }
+
+// 重要度（示範：僅存在記憶體）
+const WEIGHT = {};
+Object.keys(STAT).forEach(k => WEIGHT[k] = 0);
+WEIGHT["civ-242"] = 3; WEIGHT["cvp-400"] = 3; WEIGHT["cvp-401"] = 2; WEIGHT["civ-110"] = 2;
+
+// ================= 大廳 =================
+const lobby = document.getElementById("lobby");
+const roomEl = document.getElementById("room");
+const lobbyList = document.getElementById("lobbyList");
+const lawSel = document.getElementById("lawSel");
+const qInput = document.getElementById("q");
+let sortMode = "w", lawFilter = "", query = "";
+
+lawSel.innerHTML = `<option value="">全部法規</option>` +
+  LAWS.map(l => `<option value="${l.code}">${l.name}</option>`).join("");
+lawSel.addEventListener("change", () => { lawFilter = lawSel.value; renderLobby(); });
+qInput.addEventListener("input", () => { query = qInput.value.trim(); renderLobby(); });
+
+function matches(s){
+  if (lawFilter && s.law !== lawFilter) return false;
+  if (!query) return true;
+  if (/^\d+$/.test(query)) return String(s.num).startsWith(query);
+  if (statName(s.key).includes(query)) return true;
+  return s.refs.some(r => I[r.issue].t.includes(query) || I[r.issue].stmt.includes(query));
+}
+function renderLobby(){
+  const all = Object.values(STAT).filter(matches);
+  if (!all.length){ lobbyList.innerHTML = `<p class="empty">沒有符合的條文。</p>`; return; }
+  const cmp = (a,b) =>
+    sortMode === "w" ? (WEIGHT[b.key]-WEIGHT[a.key]) || (b.qs.size-a.qs.size) || (a.num-b.num) :
+    sortMode === "q" ? (b.qs.size-a.qs.size) || (a.num-b.num) :
+    sortMode === "i" ? (b.refs.length-a.refs.length) || (a.num-b.num) : a.num-b.num;
+  const flat = !!query;
+  const groups = flat ? {"":all} : all.reduce((o,s) => ((o[s.law]=o[s.law]||[]).push(s), o), {});
+  lobbyList.innerHTML = Object.keys(groups).map(law => {
+    const rows = groups[law].slice().sort(cmp).map(s => {
+      const ids = [...new Set(s.refs.map(r => r.issue))];
+      const pending = ids.filter(id => I[id].st !== "verified").length;
+      const marks = Array.from({length:MAX_WEIGHT}, (_,i) => markSVG(i < WEIGHT[s.key])).join("");
+      return `<li>
+        <button class="mark" data-w="${s.key}" title="重要度 ${WEIGHT[s.key]}／${MAX_WEIGHT}">${marks}</button>
+        <button class="open" data-k="${s.key}">
+          <span class="name">${flat ? statName(s.key) : "第 " + s.num + " 條"}</span>
+          <span class="meta">爭點 ${ids.length}　題目 ${s.qs.size}</span>
+        </button>
+        <span class="alert" title="${pending ? `尚有 ${pending} 張未覆核` : ""}">${pending ? alertSVG() : ""}</span>
+        </li>`;
+    }).join("");
+    const head = flat ? "" : `<h2>${LAW[law] || law}</h2>`;
+    return `<div class="group">${head}<ul class="list">${rows}</ul></div>`;
+  }).join("");
+  lobbyList.querySelectorAll(".open").forEach(b =>
+    b.addEventListener("click", () => enterRoom(b.dataset.k)));
+  lobbyList.querySelectorAll(".mark").forEach(b =>
+    b.addEventListener("click", e => {
+      e.stopPropagation();
+      const k = b.dataset.w;
+      WEIGHT[k] = (WEIGHT[k] + 1) % (MAX_WEIGHT + 1);
+      renderLobby();
+    }));
+}
+document.querySelectorAll("#sortbar .chip").forEach(b =>
+  b.addEventListener("click", () => {
+    sortMode = b.dataset.sort;
+    document.querySelectorAll("#sortbar .chip").forEach(x =>
+      x.setAttribute("aria-pressed", String(x === b)));
+    renderLobby();
+  }));
+
+// ================= 房間：圖 =================
+const svg = document.getElementById("svg");
+const gView = document.getElementById("view");
+const gLinks = document.getElementById("links");
+const gNodes = document.getElementById("nodes");
+const panel = document.getElementById("panel");
+let W=600, H=340, view={x:0,y:0,k:1}, alpha=1, raf=null;
+let curKey=null, nodes=[], links=[], byId={}, selected=null, showRing=true;
+const active = new Set(["prerequisite","opposes","cross_subject","related"]);
+const NS = "http://www.w3.org/2000/svg";
+const linkEls = [], nodeEls = [];
+
+function buildRoom(key){
+  const S = STAT[key];
+  const core = [...new Set(S.refs.map(r => r.issue))];
+  const ring = new Set();
+  core.forEach(id => adjI[id].forEach(l => {
+    const o = l.a === id ? l.b : l.a;
+    if (!core.includes(o)) ring.add(o);
+  }));
+  nodes = []; links = []; byId = {};
+  const add = o => { nodes.push(o); byId[o.id] = o; };
+  add({id:key, kind:"stat", refs:S.refs, qs:S.qs, x:0,y:0,vx:0,vy:0,fx:null,fy:null});
+  core.forEach(id => add({...I[id], kind:"core", x:0,y:0,vx:0,vy:0,fx:null,fy:null}));
+  if (showRing) [...ring].forEach(id => add({...I[id], kind:"ring", x:0,y:0,vx:0,vy:0,fx:null,fy:null}));
+  S.refs.forEach(r => links.push({a:r.issue, b:key, t:"statute", detail:r.detail}));
+  LINKS.forEach(l => { if (byId[l.a] && byId[l.b]) links.push({...l}); });
+  links.forEach(l => { l.s = byId[l.a]; l.tg = byId[l.b]; });
+  gLinks.innerHTML = ""; gNodes.innerHTML = "";
+  drawDefs(); drawGraph(); seed();
+  for (let i=0;i<300;i++) tick();
+  select(key);
+}
+function drawDefs(){
+  const d = document.createElementNS(NS,"defs");
+  const m = document.createElementNS(NS,"marker");
+  m.setAttribute("id","arrow"); m.setAttribute("viewBox","0 0 10 10");
+  m.setAttribute("refX","13"); m.setAttribute("refY","5");
+  m.setAttribute("markerWidth","5"); m.setAttribute("markerHeight","5");
+  m.setAttribute("orient","auto-start-reverse");
+  const p = document.createElementNS(NS,"path");
+  p.setAttribute("d","M0,1.5 L10,5 L0,8.5 Z"); p.setAttribute("fill","var(--mist)");
+  m.appendChild(p); d.appendChild(m); gLinks.appendChild(d);
+}
+function drawGraph(){
+  linkEls.length = 0; nodeEls.length = 0;
+  links.forEach(l => {
+    const line = document.createElementNS(NS,"line");
+    if (l.t === "statute"){
+      line.setAttribute("stroke","var(--ink-faint)");
+      line.setAttribute("stroke-dasharray","2 5"); line.setAttribute("stroke-width","1");
+    } else {
+      const T = TYPE[l.t];
+      line.setAttribute("stroke", T.color);
+      line.setAttribute("stroke-width", l.t==="related" ? 1 : 1.5);
+      if (T.dash) line.setAttribute("stroke-dasharray", T.dash);
+      if (T.arrow) line.setAttribute("marker-end","url(#arrow)");
+    }
+    gLinks.appendChild(line); linkEls.push({el:line, l});
+  });
+  nodes.forEach(n => {
+    const g = document.createElementNS(NS,"g");
+    g.setAttribute("class","node" + (n.kind==="ring" ? " dimmed" : ""));
+    const c = document.createElementNS(NS,"circle");
+    const r = n.kind==="stat" ? 26 : n.kind==="core" ? 9 : 6.5;
+    c.setAttribute("r", r);
+    if (n.kind === "stat"){
+      c.setAttribute("fill","var(--sand)");
+      c.setAttribute("stroke","var(--gold)");
+      c.setAttribute("stroke-width","1.4");
+      const ring = document.createElementNS(NS,"circle");
+      ring.setAttribute("r", r + 6);
+      ring.setAttribute("fill","none");
+      ring.setAttribute("stroke","var(--gold)");
+      ring.setAttribute("stroke-width","1");
+      ring.setAttribute("stroke-dasharray","1 4");
+      ring.setAttribute("opacity",".65");
+      ring.setAttribute("pointer-events","none");
+      g.appendChild(ring);
+    } else if (n.kind === "core"){
+      c.setAttribute("fill", n.st==="verified" ? "var(--mist)" : "var(--card)");
+      c.setAttribute("stroke", n.st==="draft" ? "var(--line)" : "var(--mist)");
+      c.setAttribute("stroke-width", n.st==="verified" ? 2 : 1.6);
+    } else {
+      c.setAttribute("fill","none"); c.setAttribute("stroke","var(--line)"); c.setAttribute("stroke-width","1.4");
+    }
+    g.appendChild(c);
+    if (n.kind === "stat"){
+      const a = document.createElementNS(NS,"text");
+      a.setAttribute("class","statsub"); a.setAttribute("y","-5");
+      a.textContent = lawOf(n.id);
+      const b = document.createElementNS(NS,"text");
+      b.setAttribute("class","statlab"); b.setAttribute("y","9");
+      b.textContent = numOf(n.id) + " 條";
+      g.append(a, b);
+    } else {
+      const s = document.createElementNS(NS,"text");
+      s.setAttribute("class","slug"); s.setAttribute("y", r+9); s.textContent = n.id;
+      const lab = document.createElementNS(NS,"text");
+      lab.setAttribute("y", r+19);
+      lab.textContent = n.t.length > 10 ? n.t.slice(0,10)+"…" : n.t;
+      g.append(s, lab);
+    }
+    g.addEventListener("pointerdown", e => startDrag(e, n));
+    gNodes.appendChild(g); nodeEls.push({el:g, n});
+  });
+}
+function seed(){
+  const R = Math.min(W,H)*0.32;
+  nodes.forEach((n,i) => {
+    if (n.kind === "stat"){ n.x = W/2; n.y = H/2; n.vx=n.vy=0; return; }
+    const a = (i/nodes.length)*Math.PI*2;
+    n.x = W/2 + Math.cos(a)*R*(n.kind==="ring"?1.5:1);
+    n.y = H/2 + Math.sin(a)*R*(n.kind==="ring"?1.5:1);
+    n.vx=n.vy=0; n.fx=n.fy=null;
+  });
+  alpha = 1;
+}
+function tick(){
+  const REP=2200, CEN=0.007, DAMP=0.86;
+  for (let i=0;i<nodes.length;i++) for (let j=i+1;j<nodes.length;j++){
+    const a=nodes[i], b=nodes[j];
+    let dx=b.x-a.x, dy=b.y-a.y, d2=dx*dx+dy*dy;
+    if (d2<1){ dx=Math.random()-0.5; dy=Math.random()-0.5; d2=1; }
+    const d=Math.sqrt(d2), mult=(a.kind==="stat"||b.kind==="stat")?2.2:1;
+    const f=REP*mult/d2*alpha;
+    a.vx-=dx/d*f; a.vy-=dy/d*f; b.vx+=dx/d*f; b.vy+=dy/d*f;
+  }
+  links.forEach(l => {
+    const LEN = l.t==="statute" ? 100 : 84;
+    const a=l.s, b=l.tg, dx=b.x-a.x, dy=b.y-a.y, d=Math.sqrt(dx*dx+dy*dy)||1;
+    const f=(d-LEN)*0.031*alpha;
+    a.vx+=dx/d*f; a.vy+=dy/d*f; b.vx-=dx/d*f; b.vy-=dy/d*f;
+  });
+  nodes.forEach(n => {
+    if (n.kind === "stat"){ n.x += (W/2-n.x)*0.2; n.y += (H/2-n.y)*0.2; n.vx=n.vy=0; return; }
+    n.vx += (W/2-n.x)*CEN*alpha; n.vy += (H/2-n.y)*CEN*alpha;
+    if (n.fx !== null){ n.x=n.fx; n.y=n.fy; n.vx=n.vy=0; return; }
+    n.vx*=DAMP; n.vy*=DAMP; n.x+=n.vx; n.y+=n.vy;
+  });
+  alpha *= 0.985; if (alpha < 0.004) alpha = 0.004;
+}
+function render(){
+  gView.setAttribute("transform", `translate(${view.x},${view.y}) scale(${view.k})`);
+  linkEls.forEach(({el,l}) => {
+    const on = l.t === "statute" ? true : active.has(l.t);
+    el.style.display = on ? "" : "none";
+    if (!on) return;
+    el.setAttribute("x1",l.s.x); el.setAttribute("y1",l.s.y);
+    el.setAttribute("x2",l.tg.x); el.setAttribute("y2",l.tg.y);
+  });
+  nodeEls.forEach(({el,n}) => el.setAttribute("transform", `translate(${n.x},${n.y})`));
+}
+
+// ---- 互動 ----
+let dragNode=null, panStart=null, pinch=null;
+const pts = new Map();
+function toSim(e){
+  const r = svg.getBoundingClientRect();
+  return {x:(e.clientX-r.left-view.x)/view.k, y:(e.clientY-r.top-view.y)/view.k};
+}
+function startDrag(e, n){
+  e.stopPropagation();
+  if (n.kind === "stat"){ select(n.id); return; }
+  dragNode = n; n.fx = n.x; n.fy = n.y;
+  svg.setPointerCapture(e.pointerId); select(n.id);
+}
+svg.addEventListener("pointerdown", e => {
+  pts.set(e.pointerId, e);
+  if (dragNode || pts.size > 1) return;
+  panStart = {px:e.clientX, py:e.clientY, vx:view.x, vy:view.y};
+  svg.setPointerCapture(e.pointerId);
+});
+svg.addEventListener("pointermove", e => {
+  if (pts.has(e.pointerId)) pts.set(e.pointerId, e);
+  if (pts.size === 2){
+    panStart = null;
+    const [a,b] = [...pts.values()];
+    const d = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+    if (pinch){
+      const k2 = Math.min(2.8, Math.max(0.4, pinch.k*d/pinch.d));
+      const r = svg.getBoundingClientRect();
+      const mx = (a.clientX+b.clientX)/2-r.left, my = (a.clientY+b.clientY)/2-r.top;
+      view.x = mx-(mx-pinch.x)*(k2/pinch.k); view.y = my-(my-pinch.y)*(k2/pinch.k); view.k = k2;
+    } else pinch = {d, k:view.k, x:view.x, y:view.y};
+    return;
+  }
+  if (dragNode){ const p = toSim(e); dragNode.fx=p.x; dragNode.fy=p.y; alpha=Math.max(alpha,0.25); return; }
+  if (panStart){ view.x = panStart.vx+(e.clientX-panStart.px); view.y = panStart.vy+(e.clientY-panStart.py); }
+});
+["pointerup","pointercancel"].forEach(ev => svg.addEventListener(ev, e => {
+  pts.delete(e.pointerId); if (pts.size < 2) pinch = null;
+  if (dragNode){ dragNode.fx = dragNode.fy = null; dragNode = null; }
+  panStart = null;
+}));
+svg.addEventListener("wheel", e => {
+  e.preventDefault();
+  const r = svg.getBoundingClientRect();
+  const mx = e.clientX-r.left, my = e.clientY-r.top;
+  const k2 = Math.min(2.8, Math.max(0.4, view.k*(e.deltaY<0?1.12:0.89)));
+  view.x = mx-(mx-view.x)*(k2/view.k); view.y = my-(my-view.y)*(k2/view.k); view.k = k2;
+}, {passive:false});
+
+// ---- 面板 ----
+function select(id){
+  selected = id;
+  const n = byId[id];
+  panel.className = "panel" + (n.kind==="stat" ? " stat" : "");
+  if (n.kind === "stat"){
+    const ids = [...new Set(n.refs.map(r => r.issue))];
+    const rows = n.refs.map(r =>
+      `<li><span class="et">${r.detail||"本條"}</span><a data-go="${r.issue}">${I[r.issue].t}</a></li>`).join("");
+    const qs = [...n.qs];
+    panel.innerHTML = `
+      <h3>${statName(n.id)}</h3>
+      <p class="slugline">重要度 ${WEIGHT[n.id]}／${MAX_WEIGHT}　條文內容【待查證】</p>
+      <span class="tag s">爭點 ${ids.length}</span><span class="tag s">相關題目 ${qs.length}</span>
+      <div class="field"><b>說明</b>本節點由各爭點卡的條號欄位即時彙整，不存在於資料庫，無條文文字與立法理由。</div>
+      <div class="edges"><h4>引用本條的爭點</h4><ul>${rows}</ul>
+        <h4>相關題目</h4><p class="q">${qs.join("　") || "—"}</p></div>`;
+  } else {
+    const ls = adjI[id].filter(l => active.has(l.t));
+    const row = l => {
+      const o = l.a===id ? l.b : l.a;
+      return `<li><span class="et">${TYPE[l.t].label}</span><a data-go="${o}">${I[o].t}</a>${byId[o]?"":"　<span class=\"et\">本房間外</span>"}</li>`;
+    };
+    const tags = (n.stat||[]).map(raw => {
+      const p = parseStat(raw);
+      return `<span class="tag go" data-room="${p.key}">${statName(p.key)}${p.detail}</span>`;
+    }).join("");
+    const qs = qsOf(id);
+    const qline = qs.map(q => `<span class="${q.ok?"right":"wrong"}">${q.id}${q.ok?" ✓":" ✗"}</span>`).join("　") || "—";
+    panel.innerHTML = `
+      <h3>${n.t}</h3>
+      <p class="slugline">${n.id}　${LAW[n.s]}　${n.kind==="ring"?"外圈鄰居":"本條爭點"}</p>
+      <span class="tag${n.st==="verified"?" v":""}">${n.st}</span>${tags}
+      <div class="field"><b>爭點一句話</b>${n.stmt}</div>
+      <div class="field"><b>對立見解</b>${n.v}</div>
+      <div class="edges">
+        <h4>連結（${ls.length}）</h4><ul>${ls.map(row).join("") || "<li>—</li>"}</ul>
+        <h4>作答紀錄</h4><p class="q">${qline}</p></div>`;
+  }
+  panel.querySelectorAll("[data-go]").forEach(a => a.addEventListener("click", () => {
+    const t = a.dataset.go;
+    byId[t] ? select(t) : enterRoom(parseStat(I[t].stat[0]).key, t);
+  }));
+  panel.querySelectorAll("[data-room]").forEach(a =>
+    a.addEventListener("click", () => enterRoom(a.dataset.room)));
+}
+
+// ---- 切換 ----
+function enterRoom(key, focusIssue){
+  curKey = key;
+  lobby.classList.add("hide"); roomEl.classList.remove("hide");
+  const S = STAT[key];
+  const ids = [...new Set(S.refs.map(r => r.issue))];
+  document.getElementById("roomTitle").textContent = statName(key);
+  const pend = ids.filter(id => I[id].st !== "verified").length;
+  document.getElementById("roomSub").textContent =
+    `引用本條的爭點 ${ids.length} 張　其中待覆核 ${pend} 張　相關題目 ${S.qs.size} 題　條文內容【待查證】`;
+  resize(); buildRoom(key);
+  document.getElementById("hint").textContent = `${nodes.length} 個節點　${links.length} 條線`;
+  view = {x:0,y:0,k:1};
+  if (focusIssue && byId[focusIssue]) select(focusIssue);
+  window.scrollTo({top:0, behavior:"smooth"});
+  if (!raf) loop();
+}
+document.getElementById("backBtn").addEventListener("click", () => {
+  roomEl.classList.add("hide"); lobby.classList.remove("hide");
+  if (raf){ cancelAnimationFrame(raf); raf = null; }
+  renderLobby(); window.scrollTo({top:0});
+});
+document.querySelectorAll('#room .chip[data-t]').forEach(b =>
+  b.addEventListener("click", () => {
+    const t = b.dataset.t, on = b.getAttribute("aria-pressed")==="true";
+    b.setAttribute("aria-pressed", String(!on));
+    on ? active.delete(t) : active.add(t);
+    if (selected) select(selected);
+  }));
+document.getElementById("ringBtn").addEventListener("click", e => {
+  showRing = !showRing;
+  e.target.setAttribute("aria-pressed", String(showRing));
+  buildRoom(curKey);
+});
+document.getElementById("resetBtn").addEventListener("click", () => { seed(); view={x:0,y:0,k:1}; });
+
+function resize(){
+  const r = svg.getBoundingClientRect();
+  W = r.width || 600; H = r.height || 340;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+}
+function loop(){ tick(); render(); raf = requestAnimationFrame(loop); }
+window.addEventListener("resize", () => { if (curKey && raf){ resize(); alpha = 0.4; } });
+renderLobby();
+</script>
+</body>
+</html>
