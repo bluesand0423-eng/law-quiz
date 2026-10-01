@@ -18,7 +18,7 @@ function statuteRowToRaw(row) {
   return row.location ? `${row.statute_key}-${row.location}` : row.statute_key;
 }
 
-export default function IssueForm({ T, slug, notifySyncFailure, onSaved, onCancel }) {
+export default function IssueForm({ T, slug, initialStatute, notifySyncFailure, onSaved, onCancel }) {
   const isEditing = !!slug;
   const [loading, setLoading] = useState(isEditing);
   const [subject, setSubject] = useState(SUBJECT_OPTIONS[0][0]);
@@ -29,7 +29,9 @@ export default function IssueForm({ T, slug, notifySyncFailure, onSaved, onCance
   const [practiceDivergent, setPracticeDivergent] = useState(false);
   const [examRefs, setExamRefs] = useState([]);
   const [examRefInput, setExamRefInput] = useState("");
-  const [statuteRaws, setStatuteRaws] = useState([]);
+  // 從法條房間「新增引用本條的爭點」進入時，initialStatute 預填這一筆條號；
+  // 僅在新增模式生效，編輯既有卡時一律以讀到的資料為準，不受此 prop 影響。
+  const [statuteRaws, setStatuteRaws] = useState(() => (!isEditing && initialStatute ? [initialStatute] : []));
   const [statuteLaw, setStatuteLaw] = useState(LAW_OPTIONS[0][0]);
   const [statuteArticle, setStatuteArticle] = useState("");
   const [statuteInputError, setStatuteInputError] = useState("");

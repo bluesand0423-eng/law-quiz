@@ -7,7 +7,7 @@ import { SUBJECTS } from "./subjects";
 const STATUS_LABEL = { draft: "草稿", active: "進行中", verified: "已覆核" };
 const LINK_TYPE_LABEL = { prerequisite: "前提", cross_subject: "跨科", related: "相關" };
 
-export default function IssueDetail({ T, slug, onBack, onEdit }) {
+export default function IssueDetail({ T, slug, onBack, onEdit, onOpenStatute, onArchivedChange }) {
   const [issue, setIssue] = useState(null); // undefined 用不到，null=載入中/查無
   const [links, setLinks] = useState([]);
   const [statutes, setStatutes] = useState([]);
@@ -56,6 +56,7 @@ export default function IssueDetail({ T, slug, onBack, onEdit }) {
     if (error) console.error("[IssueDetail] 更新 archived 失敗：", error);
     await reload();
     setBusy(false);
+    if (!error) onArchivedChange?.();
   }
 
   async function handleLinkTypeChange(toSlug, newType) {
@@ -69,7 +70,7 @@ export default function IssueDetail({ T, slug, onBack, onEdit }) {
   const cardStyle = { background: T.surface, borderRadius: 16, padding: "1rem 1.15rem", border: `1px solid ${T.bdr}`, marginBottom: "0.75rem" };
   const backBar = (
     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.875rem" }}>
-      <button onClick={onBack} style={{ background: "none", border: "none", color: T.muted, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", padding: "0.2rem 0.4rem", lineHeight: 1 }}>← 返回</button>
+      {onBack && <button onClick={onBack} style={{ background: "none", border: "none", color: T.muted, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", padding: "0.2rem 0.4rem", lineHeight: 1 }}>← 返回</button>}
       <span style={{ fontSize: "1rem", fontWeight: 500, color: T.ink, fontFamily: "'Noto Serif TC',serif" }}>爭點詳情</span>
     </div>
   );
@@ -166,9 +167,18 @@ export default function IssueDetail({ T, slug, onBack, onEdit }) {
           <p style={{ fontSize: "0.78rem", color: T.faint, margin: 0 }}>還沒有標註條號。</p>
         ) : statutes.map(s => {
           const text = formatStatuteKey({ key: s.statute_key, location: s.location });
-          return (
+          const label = text ?? `${s.statute_key}（無法辨識）`;
+          return onOpenStatute ? (
+            <button
+              key={`${s.statute_key}-${s.location}`}
+              onClick={() => onOpenStatute(s.statute_key)}
+              style={{ display: "block", textAlign: "left", background: "none", border: "none", color: T.accent, fontSize: "0.82rem", padding: "0.15rem 0", cursor: "pointer", fontFamily: "inherit" }}
+            >
+              {label}
+            </button>
+          ) : (
             <div key={`${s.statute_key}-${s.location}`} style={{ fontSize: "0.82rem", color: T.ink, padding: "0.15rem 0" }}>
-              {text ?? `${s.statute_key}（無法辨識）`}
+              {label}
             </div>
           );
         })}

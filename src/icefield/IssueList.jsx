@@ -2,11 +2,17 @@ import { useCallback, useEffect, useState } from "react";
 import { listIssues, getLinks } from "./db";
 import { computeDisplayStatus } from "./issueDisplay";
 import { SUBJECTS } from "./subjects";
+import StatuteLobby from "./StatuteLobby";
+import StatuteRoom from "./StatuteRoom";
 
 const STATUS_LABEL = { draft: "草稿", active: "進行中", verified: "已覆核" };
 const SUBJECT_OPTIONS = Object.entries(SUBJECTS);
 
-export default function IssueList({ T, onOpen, onCreate, onBack }) {
+export default function IssueList({ T, onOpen, onCreate, onBack, notifySyncFailure }) {
+  // view 管理「爭點列表／法條大廳／法條房間」三個子畫面的切換，entry point
+  // 就放在這裡（而不是 IcefieldApp），對應指令「入口放在既有 IssueList.jsx」。
+  const [view, setView] = useState("list"); // list | lobby | room
+  const [roomKey, setRoomKey] = useState(null);
   const [subject, setSubject] = useState("");
   const [status, setStatus] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -47,14 +53,41 @@ export default function IssueList({ T, onOpen, onCreate, onBack }) {
 
   const selectStyle = { padding: "0.4rem 0.5rem", borderRadius: 8, border: `1px solid ${T.bdr}`, background: T.bg, color: T.ink, fontFamily: "inherit", fontSize: "0.8rem" };
   const card = { background: T.surface, borderRadius: 14, padding: "0.85rem 1rem", border: `1px solid ${T.bdr}`, marginBottom: "0.65rem", cursor: "pointer" };
+  const tab = (on) => ({ font: "inherit", fontSize: "0.78rem", padding: "0.3rem 0.7rem", borderRadius: 999, border: `1px solid ${T.bdr}`, background: on ? T.cta : "transparent", color: on ? "#ECEAE5" : T.muted, cursor: "pointer" });
+
+  function openRoom(key) {
+    setRoomKey(key);
+    setView("room");
+  }
+
+  if (view === "room" && roomKey) {
+    return (
+      <StatuteRoom
+        T={T}
+        statuteKey={roomKey}
+        notifySyncFailure={notifySyncFailure}
+        onBack={() => setView("lobby")}
+        onOpenStatute={openRoom}
+      />
+    );
+  }
 
   return (
     <div style={{ marginTop: "0.75rem" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.875rem" }}>
         <button onClick={onBack} style={{ background: "none", border: "none", color: T.muted, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", padding: "0.2rem 0.4rem", lineHeight: 1 }}>← 回首頁</button>
-        <span style={{ fontSize: "1rem", fontWeight: 500, color: T.ink, fontFamily: "'Noto Serif TC',serif" }}>爭點卡</span>
+        <span style={{ fontSize: "1rem", fontWeight: 500, color: T.ink, fontFamily: "'Noto Serif TC',serif" }}>{view === "lobby" ? "法條大廳" : "爭點卡"}</span>
       </div>
 
+      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
+        <button onClick={() => setView("list")} aria-pressed={view === "list"} style={tab(view === "list")}>爭點列表</button>
+        <button onClick={() => setView("lobby")} aria-pressed={view === "lobby"} style={tab(view === "lobby")}>法條大廳</button>
+      </div>
+
+      {view === "lobby" ? (
+        <StatuteLobby T={T} onEnterRoom={openRoom} />
+      ) : (
+        <>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>
         <select value={subject} onChange={e => setSubject(e.target.value)} style={selectStyle}>
           <option value="">全部科目</option>
@@ -101,6 +134,8 @@ export default function IssueList({ T, onOpen, onCreate, onBack }) {
             </div>
           );
         })
+      )}
+        </>
       )}
     </div>
   );

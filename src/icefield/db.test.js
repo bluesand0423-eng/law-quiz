@@ -14,6 +14,7 @@ import {
   getIssue,
   getLinks,
   updateLinkType,
+  listStatuteRefs,
 } from "./db";
 
 beforeEach(() => {
@@ -265,6 +266,84 @@ describe("updateLinkType：手動重新分類", () => {
     });
 
     const result = await updateLinkType("cvp-014", "cvp-007", "opposes");
+    expect(result.error).toBeTruthy();
+  });
+
+});
+
+describe("listStatuteRefs：法條大廳／房間用的彙整讀取", () => {
+
+  it("排除已封存或已不存在的爭點留下的條號列，並附上對應爭點資料", async () => {
+    supabase.from.mockImplementation((table) => {
+      if (table === "issues") {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => Promise.resolve({
+                data: [{ slug: "cvp-001", title: "A", status: "draft" }],
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "issue_statutes") {
+        return {
+          select: () => Promise.resolve({
+            data: [
+              { statute_key: "cvp-400", location: "1", issue_slug: "cvp-001" },
+              { statute_key: "cvp-400", location: "", issue_slug: "cvp-999" }, // 已封存或不存在
+            ],
+            error: null,
+          }),
+        };
+      }
+      throw new Error(`測試未預期呼叫 supabase.from("${table}")`);
+    });
+
+    const result = await listStatuteRefs();
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0].issue_slug).toBe("cvp-001");
+    expect(result.data[0].issue.title).toBe("A");
+  });
+
+  it("issues 查詢失敗時中止，回傳 error", async () => {
+    supabase.from.mockImplementation((table) => {
+      if (table === "issues") {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => Promise.resolve({ data: null, error: { message: "network error" } }),
+            }),
+          }),
+        };
+      }
+      if (table === "issue_statutes") {
+        return { select: () => Promise.resolve({ data: [], error: null }) };
+      }
+      throw new Error(`測試未預期呼叫 supabase.from("${table}")`);
+    });
+
+    const result = await listStatuteRefs();
+    expect(result.error).toBeTruthy();
+  });
+
+  it("issue_statutes 查詢失敗時回傳 error", async () => {
+    supabase.from.mockImplementation((table) => {
+      if (table === "issues") {
+        return {
+          select: () => ({
+            eq: () => ({ order: () => Promise.resolve({ data: [], error: null }) }),
+          }),
+        };
+      }
+      if (table === "issue_statutes") {
+        return { select: () => Promise.resolve({ data: null, error: { message: "network error" } }) };
+      }
+      throw new Error(`測試未預期呼叫 supabase.from("${table}")`);
+    });
+
+    const result = await listStatuteRefs();
     expect(result.error).toBeTruthy();
   });
 

@@ -55,6 +55,7 @@ export default function IcefieldApp({ T, notifySyncFailure, onExit }) {
       onOpen={openDetail}
       onCreate={openCreate}
       onBack={onExit}
+      notifySyncFailure={notifySyncFailure}
     />
   );
 }

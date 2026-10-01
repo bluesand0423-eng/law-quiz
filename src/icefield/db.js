@@ -66,6 +66,28 @@ export async function getStatutes(slug) {
   return { data };
 }
 
+// 法條大廳／法條房間用：一次撈出全部 issue_statutes，並附上對應（未封存）
+// 爭點的完整欄位。不對 issue_statutes 做 .eq("archived",...)（該表本身沒有
+// archived 欄位），改用 listIssues({archived:false}) 的結果在記憶體中比對，
+// 避免依賴跨表 embed 查詢語法。已封存或已不存在的爭點所留下的條號列會被排除。
+export async function listStatuteRefs() {
+  const [issuesResult, statutesResult] = await Promise.all([
+    listIssues({ archived: false }),
+    supabase.from("issue_statutes").select("statute_key, location, issue_slug"),
+  ]);
+  if (issuesResult.error) return { error: issuesResult.error };
+  if (statutesResult.error) {
+    console.error("[listStatuteRefs] issue_statutes select 失敗：", statutesResult.error);
+    return { error: statutesResult.error };
+  }
+
+  const issueMap = new Map((issuesResult.data ?? []).map(i => [i.slug, i]));
+  const data = (statutesResult.data ?? [])
+    .filter(row => issueMap.has(row.issue_slug))
+    .map(row => ({ ...row, issue: issueMap.get(row.issue_slug) }));
+  return { data };
+}
+
 // ============================================================
 // slug 自動產生（新增卡片時使用，不讓使用者輸入）
 // ============================================================
