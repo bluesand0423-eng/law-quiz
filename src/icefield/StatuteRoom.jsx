@@ -453,6 +453,7 @@ export default function StatuteRoom({ T, statuteKey, notifySyncFailure, onBack, 
             onEdit={(slug) => { setFormSlug(slug); setPanelMode("form"); }}
             onOpenStatute={(key) => onOpenStatute(key)}
             onArchivedChange={() => loadRoom(statuteKey)}
+            notifySyncFailure={notifySyncFailure}
           />
         )}
 

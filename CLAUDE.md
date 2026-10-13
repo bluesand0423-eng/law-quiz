@@ -45,6 +45,7 @@
 - user_progress：題目作答紀錄，stars text[] 對應 5 星機制
 - penguin_journal：每日企鵝日誌，含 penguin_note、user_note（時光膠囊）、milestone_type TEXT
 - user_stats：total_study_days 為主指標（不歸零），streak_days 為次要，days_together 從 first_login_at 起算
+- issues／issue_links／issue_statutes：冰原爭點卡三表，見 `supabase/migrations/20260924_p0a_icefield_tables.sql`
 
 ## 企鵝文案永久禁止事項
 - 不得指責、製造罪惡感、表現失望、因未登入抱怨
@@ -55,12 +56,28 @@
 
 ## 當前狀態
 
-最後更新：2026-05-31
+最後更新：2026-10-13
 
 ### 已完成
 - **Phase 0**：Supabase 地基（Auth + 三張資料表 + RLS）
 - **Phase 1**：企鵝見證者 MVP（水彩設計系統 + 企鵝日誌卡片）
 - 正式部署至 Vercel，commit 72fe039，15 files changed
+
+### 冰原現況（依 git log，各 commit 原始訊息）
+- **P0-A 建表**
+  - `4a0d4f4` 新增 P0-A 冰原建表 migration 紀錄
+  - `6a7c0ef` 建表 SOP 補上 REVOKE anon 步驟
+- **P0-B 資料層與基礎 CRUD 畫面**
+  - `7a01e2d` 新增題目物件的冰原欄位約定與存取器
+  - `cc95fc0` 新增條號正規化工具與單元測試
+  - `26305d3` 新增冰原資料存取層
+  - `8df52e7` 新增冰原爭點卡列表、詳情與編輯畫面
+  - `c0fcf27` 補上爭點卡的出處與要件文字欄位
+- **法典代碼與科目代碼分離**
+  - `62a3481` 法典代碼與科目代碼分離
+- **P1 法條大廳／房間**
+  - `1fa626c` 冰原力導向佈局抽出為純函式
+  - `2873249` 新增冰原法條大廳與法條房間
 
 ### 新增檔案（src/）
 | 檔案 | 說明 |
@@ -110,6 +127,53 @@ const MILESTONE_LABELS = {
   QUESTIONS_1000: "累積 1000 題",
 };
 ```
+
+## 冰原批次匯入 JSON 格式
+
+供 `src/icefield/IssueImport.jsx` 貼上使用；寫入一律以 `status: "draft"`（JSON 帶其他值會被改寫並在預覽中標示），一律透過既有的 `createIssue`／`setStatutes`／`createLinks`，不直接操作資料表。
+
+```json
+{
+  "source": "講義名稱 第X章 p.12–18",
+  "issues": [
+    {
+      "ref": "a1",
+      "subject": "cvp",
+      "title": "爭點一句話（疑問句）",
+      "statement": "正文",
+      "views": [
+        { "type": "通說",   "holder": "", "content": "" },
+        { "type": "有力說", "holder": "", "content": "" },
+        { "type": "實務",   "holder": "", "content": "" }
+      ],
+      "statutes": ["cvp-400-1"],
+      "sources": "出處與要件文字",
+      "practice_divergent": false
+    }
+  ],
+  "links": [
+    { "from": "a1", "to": "a2", "type": "prerequisite" }
+  ]
+}
+```
+
+`links` 的 `from`／`to` 可以是本批的 `ref`，也可以是資料庫已存在的 slug。
+
+### validateImport 規則（任一錯誤即不得寫入）
+- `subject` 必須在 SUBJECTS 內；`title` 非空；`ref` 本批內唯一
+- `views` 可省略（視為三格空白）；若提供，必須恰為三格，`type` 依序為通說、有力說、實務（IssueForm 讀到長度不是 3 的 views 會整個重設為空，之後存檔就會把資料洗掉）
+- `statutes` 每一筆：`parseStatuteKey` 非 null，且 `formatStatuteKey` 非 null；法典代碼不在 LAW_CODES 的，錯誤訊息要寫出代碼
+- 任何文字欄位含 `[[`：錯誤（本批卡片在寫入前沒有 slug，連結一律放 `links`）
+- `links`：`type` 在 LINK_TYPES 內；`from ≠ to`；端點須為本批 ref 或既有 slug
+- 重複偵測：同 subject 下已存在相同 title（去除前後空白後完全相同）的卡 → 標為「略過，沿用既有 slug」，不算錯誤，讓中途失敗後可直接重貼同一份 JSON
+
+### runImport 寫入順序（不可並行）
+1. 依序 `createIssue`（`status: "draft"`）
+2. 每張新卡建完立即 `setStatutes`
+3. 全部卡完成後，以 ref→slug 對照表解析 `links`，呼叫 `createLinks`
+4. 任何一步失敗：立即停止、`notifySyncFailure()`，回傳已完成的 ref→slug 對照與停在哪一步；不回滾
+
+`createLinks(rows)`：寫入 `auto: false` 的手動連結，以 `(user_id, from_slug, to_slug, link_type)` 為衝突鍵 upsert 並忽略重複，使重貼不會失敗。
 
 ## 開發原則
 

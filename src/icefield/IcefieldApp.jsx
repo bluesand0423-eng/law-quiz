@@ -33,6 +33,7 @@ export default function IcefieldApp({ T, notifySyncFailure, onExit }) {
         slug={activeSlug}
         onBack={backToList}
         onEdit={openEdit}
+        notifySyncFailure={notifySyncFailure}
       />
     );
   }

@@ -7,7 +7,7 @@ import { SUBJECTS } from "./subjects";
 const STATUS_LABEL = { draft: "草稿", active: "進行中", verified: "已覆核" };
 const LINK_TYPE_LABEL = { prerequisite: "前提", cross_subject: "跨科", related: "相關" };
 
-export default function IssueDetail({ T, slug, onBack, onEdit, onOpenStatute, onArchivedChange }) {
+export default function IssueDetail({ T, slug, onBack, onEdit, onOpenStatute, onArchivedChange, notifySyncFailure }) {
   const [issue, setIssue] = useState(null); // undefined 用不到，null=載入中/查無
   const [links, setLinks] = useState([]);
   const [statutes, setStatutes] = useState([]);
@@ -53,7 +53,10 @@ export default function IssueDetail({ T, slug, onBack, onEdit, onOpenStatute, on
   async function handleToggleArchived() {
     setBusy(true);
     const { error } = await setArchived(slug, !issue.archived);
-    if (error) console.error("[IssueDetail] 更新 archived 失敗：", error);
+    if (error) {
+      console.error("[IssueDetail] 更新 archived 失敗：", error);
+      notifySyncFailure?.();
+    }
     await reload();
     setBusy(false);
     if (!error) onArchivedChange?.();
@@ -62,7 +65,10 @@ export default function IssueDetail({ T, slug, onBack, onEdit, onOpenStatute, on
   async function handleLinkTypeChange(toSlug, newType) {
     setBusy(true);
     const { error } = await updateLinkType(slug, toSlug, newType);
-    if (error) console.error("[IssueDetail] 更新 link_type 失敗：", error);
+    if (error) {
+      console.error("[IssueDetail] 更新 link_type 失敗：", error);
+      notifySyncFailure?.();
+    }
     await reload();
     setBusy(false);
   }
