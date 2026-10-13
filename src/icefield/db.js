@@ -311,4 +311,28 @@ export async function updateLinkType(fromSlug, toSlug, linkType) {
   return { data };
 }
 
+// 批次匯入用：寫入 auto:false 的手動連結。以 (user_id, from_slug, to_slug,
+// link_type) 為衝突鍵 upsert 並忽略重複（ignoreDuplicates），讓匯入中途
+// 失敗後重貼同一份 JSON 不會因為連結已存在而報錯。
+export async function createLinks(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return { data: [] };
+
+  const payload = rows.map(r => ({
+    from_slug: r.from_slug,
+    to_slug: r.to_slug,
+    link_type: r.link_type,
+    auto: false,
+  }));
+
+  const { data, error } = await supabase
+    .from("issue_links")
+    .upsert(payload, { onConflict: "user_id,from_slug,to_slug,link_type", ignoreDuplicates: true })
+    .select();
+  if (error) {
+    console.error("[createLinks] issue_links upsert 失敗：", error);
+    return { error };
+  }
+  return { data };
+}
+
 export { LINK_TYPES };

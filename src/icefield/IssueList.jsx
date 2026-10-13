@@ -4,14 +4,16 @@ import { computeDisplayStatus } from "./issueDisplay";
 import { SUBJECTS } from "./subjects";
 import StatuteLobby from "./StatuteLobby";
 import StatuteRoom from "./StatuteRoom";
+import IssueImport from "./IssueImport";
 
 const STATUS_LABEL = { draft: "草稿", active: "進行中", verified: "已覆核" };
 const SUBJECT_OPTIONS = Object.entries(SUBJECTS);
 
 export default function IssueList({ T, onOpen, onCreate, onBack, notifySyncFailure }) {
-  // view 管理「爭點列表／法條大廳／法條房間」三個子畫面的切換，entry point
-  // 就放在這裡（而不是 IcefieldApp），對應指令「入口放在既有 IssueList.jsx」。
-  const [view, setView] = useState("list"); // list | lobby | room
+  // view 管理「爭點列表／法條大廳／法條房間／批次匯入」四個子畫面的切換，
+  // entry point 就放在這裡（而不是 IcefieldApp），對應指令
+  // 「入口放在既有 IssueList.jsx」。
+  const [view, setView] = useState("list"); // list | lobby | room | import
   const [roomKey, setRoomKey] = useState(null);
   const [subject, setSubject] = useState("");
   const [status, setStatus] = useState("");
@@ -76,16 +78,21 @@ export default function IssueList({ T, onOpen, onCreate, onBack, notifySyncFailu
     <div style={{ marginTop: "0.75rem" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.875rem" }}>
         <button onClick={onBack} style={{ background: "none", border: "none", color: T.muted, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit", padding: "0.2rem 0.4rem", lineHeight: 1 }}>← 回首頁</button>
-        <span style={{ fontSize: "1rem", fontWeight: 500, color: T.ink, fontFamily: "'Noto Serif TC',serif" }}>{view === "lobby" ? "法條大廳" : "爭點卡"}</span>
+        <span style={{ fontSize: "1rem", fontWeight: 500, color: T.ink, fontFamily: "'Noto Serif TC',serif" }}>
+          {view === "lobby" ? "法條大廳" : view === "import" ? "批次匯入" : "爭點卡"}
+        </span>
       </div>
 
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
         <button onClick={() => setView("list")} aria-pressed={view === "list"} style={tab(view === "list")}>爭點列表</button>
         <button onClick={() => setView("lobby")} aria-pressed={view === "lobby"} style={tab(view === "lobby")}>法條大廳</button>
+        <button onClick={() => setView("import")} aria-pressed={view === "import"} style={tab(view === "import")}>批次匯入</button>
       </div>
 
       {view === "lobby" ? (
         <StatuteLobby T={T} onEnterRoom={openRoom} />
+      ) : view === "import" ? (
+        <IssueImport T={T} notifySyncFailure={notifySyncFailure} onOpenIssue={onOpen} />
       ) : (
         <>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginBottom: "0.75rem" }}>

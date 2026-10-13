@@ -15,6 +15,7 @@ import {
   getLinks,
   updateLinkType,
   listStatuteRefs,
+  createLinks,
 } from "./db";
 
 beforeEach(() => {
@@ -266,6 +267,49 @@ describe("updateLinkType：手動重新分類", () => {
     });
 
     const result = await updateLinkType("cvp-014", "cvp-007", "opposes");
+    expect(result.error).toBeTruthy();
+  });
+
+});
+
+describe("createLinks：批次匯入用的手動連結 upsert", () => {
+
+  it("空陣列不呼叫 Supabase，直接回傳空資料", async () => {
+    supabase.from.mockImplementation((table) => {
+      throw new Error(`空陣列不應呼叫 supabase.from("${table}")`);
+    });
+
+    const result = await createLinks([]);
+    expect(result.data).toEqual([]);
+  });
+
+  it("以 (user_id, from_slug, to_slug, link_type) 為衝突鍵 upsert，auto 一律為 false，並忽略重複", async () => {
+    const upsertSpy = vi.fn(() => ({
+      select: () => Promise.resolve({ data: [{ from_slug: "a", to_slug: "b", link_type: "related" }], error: null }),
+    }));
+    supabase.from.mockImplementation((table) => {
+      if (table === "issue_links") return { upsert: upsertSpy };
+      throw new Error(`測試未預期呼叫 supabase.from("${table}")`);
+    });
+
+    const result = await createLinks([{ from_slug: "a", to_slug: "b", link_type: "related" }]);
+
+    expect(upsertSpy).toHaveBeenCalledWith(
+      [{ from_slug: "a", to_slug: "b", link_type: "related", auto: false }],
+      { onConflict: "user_id,from_slug,to_slug,link_type", ignoreDuplicates: true },
+    );
+    expect(result.error).toBeFalsy();
+  });
+
+  it("upsert 失敗時回傳 error", async () => {
+    supabase.from.mockImplementation((table) => {
+      if (table === "issue_links") {
+        return { upsert: () => ({ select: () => Promise.resolve({ data: null, error: { message: "network error" } }) }) };
+      }
+      throw new Error(`測試未預期呼叫 supabase.from("${table}")`);
+    });
+
+    const result = await createLinks([{ from_slug: "a", to_slug: "b", link_type: "related" }]);
     expect(result.error).toBeTruthy();
   });
 
